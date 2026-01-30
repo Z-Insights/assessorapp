@@ -53,11 +53,17 @@ function initApp() {
     // 4. Set up event listeners
     setupEventListeners();
     
-    // 5. Start auto-save interval
+    // 5. Fix Bulk Photo Input for Gallery Access
+    optimizePhotoInput('bulkPhotoInput');
+    
+    // 6. Start auto-save interval
     startAutoSave();
     
-    // 6. Update UI based on state
+    // 7. Update UI based on state
     updateUIFromState();
+    
+    // 8. Initialize type description
+    updateTypeDescription();
     
     console.log("App initialized successfully");
 }
@@ -86,6 +92,16 @@ function initPropertyList() {
     });
 }
 
+function optimizePhotoInput(elementId) {
+    const input = document.getElementById(elementId);
+    if (input) {
+        // Use specific MIME types to encourage "Gallery or Camera" prompt
+        // instead of forcing camera.
+        input.accept = "image/png, image/jpeg, image/jpg, image/webp, image/heic";
+        input.removeAttribute('capture'); 
+    }
+}
+
 function setupEventListeners() {
     // Header field auto-save
     document.querySelectorAll('[data-state-key]').forEach(field => {
@@ -106,10 +122,34 @@ function setupEventListeners() {
     // Photo upload
     document.getElementById('bulkPhotoInput').addEventListener('change', handlePhotoUpload);
     
-    // FIX: Remove duplicate event listeners and fix the Generate Report button
+    // Buttons
     document.getElementById('btnSaveDraft').addEventListener('click', saveDraft);
-    document.getElementById('btnShowReport').addEventListener('click', () => toggleReportModal(true));
-    // FIX: Remove the duplicate event listener for btnGenerateReport that was in the modal
+    document.getElementById('btnGenerateReport').addEventListener('click', generateReport);
+    document.getElementById('btnShowReport').addEventListener('click', () => {
+        generateReport(); // Regenerate before showing
+    });
+    document.getElementById('btnReset').addEventListener('click', confirmReset);
+    document.getElementById('btnAutoSummary').addEventListener('click', generateAutoSummary);
+    
+    // Unit status radio buttons
+    document.querySelectorAll('input[name="unitStatus"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            appState.unitStatus = this.value;
+            debouncedSave();
+        });
+    });
+    
+    // Deficiency notes auto-save
+    document.getElementById('deficiencyNotes').addEventListener('input', function() {
+        appState.deficiencyNotes = this.value;
+        debouncedSave();
+    });
+    
+    // Final notes auto-save
+    document.getElementById('finalNotes').addEventListener('input', function() {
+        appState.finalNotes = this.value;
+        debouncedSave();
+    });
     
     // Print handling
     window.addEventListener('beforeprint', () => {
@@ -120,17 +160,12 @@ function setupEventListeners() {
         document.body.classList.remove('print-mode');
     });
     
-    // FIX: Add event listener for the footer Generate Report button
-    document.getElementById('btnGenerateReport').addEventListener('click', function() {
-        generateReport();
-        toggleReportModal(false);
+    // Close modal when clicking outside
+    document.getElementById('reportModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            toggleReportModal();
+        }
     });
-    
-    // FIX: Add event listener for Reset button
-    document.getElementById('btnReset').addEventListener('click', confirmReset);
-    
-    // FIX: Add event listener for Auto Summary button
-    document.getElementById('btnAutoSummary').addEventListener('click', generateAutoSummary);
 }
 
 // ============================================================================
@@ -223,15 +258,12 @@ function renderChecklist() {
             
             const photoInput = document.createElement('input');
             photoInput.type = 'file';
-            photoInput.accept = 'image/*';
-            // FIX: Remove capture="environment" to allow gallery selection
-            photoInput.className = 'text-xs';
+            // FIX: Specific accept types to prevent "Camera Only" lock
+            photoInput.accept = 'image/png, image/jpeg, image/jpg, image/webp';
+            photoInput.className = 'text-xs hidden'; // Hidden, triggered by label
             photoInput.multiple = true;
+            photoInput.removeAttribute('capture');
             photoInput.addEventListener('change', (e) => handleItemPhotoUpload(e, itemId));
-            
-            // Accessibility: unique described-by hint per item
-            const itemHelpId = `photoHelpText-${itemId}`;
-            photoInput.setAttribute('aria-describedby', itemHelpId);
             
             const photoLabel = document.createElement('span');
             photoLabel.className = 'text-xs text-gray-600';
@@ -242,13 +274,6 @@ function renderChecklist() {
             photoWrapper.appendChild(photoLabel);
             photoWrapper.appendChild(photoInput);
             photoRow.appendChild(photoWrapper);
-
-            // Per-item hint (visible + accessible)
-            const photoHelp = document.createElement('p');
-            photoHelp.id = itemHelpId;
-            photoHelp.className = 'ml-2 mt-1 text-xs text-gray-500';
-            photoHelp.textContent = 'Supports Camera & Gallery — choose multiple images or take new photos.';
-            photoRow.appendChild(photoHelp);
             
             // Note input
             const noteInput = document.createElement('textarea');
@@ -298,14 +323,11 @@ function renderChecklist() {
 // ============================================================================
 
 function updateStateField(key, value) {
-    // Handle nested state (header fields)
     if (key in appState.header) {
         appState.header[key] = value;
     } else {
         appState[key] = value;
     }
-    
-    // Auto-save trigger
     debouncedSave();
 }
 
@@ -320,7 +342,7 @@ function updateItemStatus(itemId, status) {
     // Update critical fail tracking
     const itemElement = document.querySelector(`[data-item-id="${itemId}"]`);
     if (itemElement && status === 'fail' && itemElement.dataset.critical === 'true') {
-        showCriticalAlert(itemId);
+        // Optional: Alert animation or logic here
     }
     
     debouncedSave();
@@ -351,7 +373,10 @@ function updateUIFromState() {
     
     // Update unit status
     if (appState.unitStatus) {
-        document.querySelector(`input[name="unitStatus"][value="${appState.unitStatus}"]`).checked = true;
+        const radio = document.querySelector(`input[name="unitStatus"][value="${appState.unitStatus}"]`);
+        if (radio) {
+            radio.checked = true;
+        }
     }
     
     // Update photo counter
@@ -435,7 +460,7 @@ async function handlePhotoUpload(event) {
                 data: compressed.data,
                 caption: file.name.replace(/\.[^/.]+$/, ""), // Remove extension
                 timestamp: Date.now(),
-                itemId: null // Global photo, not attached to specific item
+                itemId: null // Global photo
             };
             
             appState.photos.push(photo);
@@ -457,7 +482,6 @@ async function handleItemPhotoUpload(event, itemId) {
     const files = Array.from(event.target.files || []);
     if (files.length === 0) return;
     
-    // Check limit
     const remaining = APP_CONFIG.IMAGE.MAX_PHOTOS - appState.photos.length;
     const toProcess = files.slice(0, Math.min(remaining, files.length));
     
@@ -486,7 +510,6 @@ async function handleItemPhotoUpload(event, itemId) {
             
             appState.items[itemId].photos.push(photo.id);
             
-            // Re-render checklist to show new photo
             renderChecklist();
             renderPhotoGrid();
             updatePhotoCounter();
@@ -549,10 +572,8 @@ function renderPhotoGrid() {
 function removePhoto(photoId) {
     if (!confirm('Remove this photo?')) return;
     
-    // Remove from global photos
     appState.photos = appState.photos.filter(p => p.id !== photoId);
     
-    // Remove from any items
     Object.keys(appState.items).forEach(itemId => {
         if (appState.items[itemId].photos) {
             appState.items[itemId].photos = appState.items[itemId].photos.filter(p => p !== photoId);
@@ -570,7 +591,6 @@ function updatePhotoCounter() {
     if (counter) {
         counter.textContent = `${appState.photos.length}/${APP_CONFIG.IMAGE.MAX_PHOTOS}`;
         
-        // Color code based on usage
         if (appState.photos.length >= APP_CONFIG.IMAGE.MAX_PHOTOS) {
             counter.className = 'ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded';
         } else if (appState.photos.length >= APP_CONFIG.IMAGE.MAX_PHOTOS * 0.8) {
@@ -585,20 +605,26 @@ function updatePhotoCounter() {
 // STORAGE & PERSISTENCE
 // ============================================================================
 
+// Debounce wrapper to prevent too many saves
+let saveTimeout;
+function debouncedSave() {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(saveDraft, 1000);
+}
+
 function saveDraft() {
     try {
         appState.lastSaved = new Date().toISOString();
         localStorage.setItem(APP_CONFIG.STORAGE.DRAFT_KEY, JSON.stringify(appState));
         
-        // Visual feedback
         const btn = document.getElementById('btnSaveDraft');
         const originalHTML = btn.innerHTML;
         btn.innerHTML = '<i class="fas fa-check mr-1"></i> Saved';
         btn.className = 'px-3 py-1.5 text-xs bg-green-100 text-green-700 rounded';
         
         setTimeout(() => {
-            btn.innerHTML = originalHTML;
-            btn.className = 'px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50';
+            btn.innerHTML = '<i class="fas fa-save mr-1"></i> Save';
+            btn.className = 'px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50 smooth-transition';
         }, 1500);
         
     } catch (error) {
@@ -614,68 +640,66 @@ function loadDraft() {
         const saved = localStorage.getItem(APP_CONFIG.STORAGE.DRAFT_KEY);
         if (saved) {
             const parsed = JSON.parse(saved);
-            
-            // Merge with existing state (preserve current session if loading fails)
             if (parsed) {
-                // Deep merge for complex objects
                 appState = {
                     ...appState,
                     ...parsed,
                     header: { ...appState.header, ...parsed.header },
                     items: { ...appState.items, ...parsed.items }
                 };
-                
-                // Ensure photos array exists
                 appState.photos = parsed.photos || [];
-                
                 console.log('Draft loaded successfully');
                 return true;
             }
         }
     } catch (error) {
         console.warn('Failed to load draft:', error);
-        // Don't alert user - just start fresh
     }
     return false;
 }
 
 function startAutoSave() {
     setInterval(() => {
-        if (hasUnsavedChanges()) {
-            saveDraft();
-        }
+        saveDraft(); // Basic interval save
     }, APP_CONFIG.STORAGE.AUTO_SAVE_INTERVAL);
-}
-
-function hasUnsavedChanges() {
-    // Simple check - always return true for demo
-    // In production, compare with last saved state
-    return true;
 }
 
 // ============================================================================
 // REPORT GENERATION ENGINE
 // ============================================================================
 
+function toggleReportModal() {
+    const modal = document.getElementById('reportModal');
+    if (modal) {
+        modal.classList.toggle('hidden');
+    }
+}
+
+function showReportModal() {
+    const modal = document.getElementById('reportModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+    }
+}
+
 function generateReport() {
-    // Update state from form
+    // 1. Collect all data
     collectFormData();
     
-    // Generate auto-summary if enabled
+    // 2. Run logic (summary)
     if (APP_CONFIG.UI.AUTO_GENERATE_SUMMARY) {
         generateAutoSummary();
     }
     
+    // 3. Render HTML
     const reportContent = document.getElementById('reportContent');
     if (!reportContent) return;
     
     const inspectionType = appState.header.inspectionType || 'routine';
     const typeLabel = APP_CONFIG.INSPECTION_TYPES[inspectionType] || inspectionType;
     
-    // Build report HTML
     const reportHTML = `
         <div class="space-y-6">
-            <!-- Header -->
             <div class="border-b-2 border-blue-600 pb-4">
                 <div class="flex justify-between items-start">
                     <div>
@@ -690,7 +714,6 @@ function generateReport() {
                 </div>
             </div>
             
-            <!-- Property Info -->
             <div class="bg-gray-50 p-4 rounded-lg grid grid-cols-2 gap-4 text-sm">
                 <div>
                     <p class="text-xs font-bold text-gray-500 uppercase">Property Address</p>
@@ -718,7 +741,6 @@ function generateReport() {
                 </div>
             </div>
             
-            <!-- Executive Summary -->
             <div>
                 <h2 class="text-lg font-bold border-b pb-2 mb-3 text-gray-800">
                     <i class="fas fa-chart-line mr-2"></i>Executive Summary
@@ -728,28 +750,23 @@ function generateReport() {
                 </div>
             </div>
             
-            <!-- Findings by Section -->
             <div>
                 <h2 class="text-lg font-bold border-b pb-2 mb-3 text-gray-800">
                     <i class="fas fa-clipboard-check mr-2"></i>Detailed Findings
                 </h2>
-                
                 ${generateFindingsHTML()}
             </div>
             
-            <!-- Photo Evidence -->
             <div>
                 <h2 class="text-lg font-bold border-b pb-2 mb-3 text-gray-800">
                     <i class="fas fa-camera mr-2"></i>Photographic Evidence
                     <span class="text-sm font-normal text-gray-600 ml-2">(${appState.photos.length} photos)</span>
                 </h2>
-                
                 <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
                     ${generatePhotoEvidenceHTML()}
                 </div>
             </div>
             
-            <!-- Footer -->
             <div class="pt-6 border-t text-center">
                 <p class="text-xs text-gray-500">
                     Generated by ${APP_CONFIG.BRAND_NAME} Unified Field Assessor<br>
@@ -768,6 +785,9 @@ function generateReport() {
     `;
     
     reportContent.innerHTML = reportHTML;
+    
+    // 4. Show Modal
+    showReportModal();
 }
 
 function generateFindingsHTML() {
@@ -795,7 +815,7 @@ function generateFindingsHTML() {
                               'bg-gray-100 text-gray-800';
             
             html += `
-                <div class="border rounded p-3">
+                <div class="border rounded p-3 break-inside-avoid">
                     <div class="flex justify-between items-start mb-2">
                         <span class="font-medium">${item.label}</span>
                         <span class="text-xs px-2 py-1 rounded ${statusClass}">${itemState.status.toUpperCase()}</span>
@@ -807,10 +827,7 @@ function generateFindingsHTML() {
             `;
         });
         
-        html += `
-                </div>
-            </div>
-        `;
+        html += `</div></div>`;
     });
     
     return html || '<p class="text-gray-500 italic">No findings recorded.</p>';
@@ -824,7 +841,7 @@ function generatePhotoEvidenceHTML() {
     let html = '';
     appState.photos.slice(0, 12).forEach(photo => {
         html += `
-            <div class="border rounded overflow-hidden">
+            <div class="border rounded overflow-hidden break-inside-avoid">
                 <img src="${photo.data}" class="w-full h-32 object-cover" alt="${photo.caption}">
                 <div class="p-2 text-xs text-gray-600 truncate">${photo.caption}</div>
             </div>
@@ -851,15 +868,11 @@ function generateReportId() {
 function updateTypeDescription() {
     const type = document.getElementById('inspectionType').value;
     const desc = document.getElementById('typeDescription');
+    const descriptions = APP_CONFIG.INSPECTION_TYPES;
     
-    const descriptions = {
-        routine: 'Focus: Safety compliance, unauthorized occupants, and lease violations.',
-        turnover: 'Focus: Rent-ready forensic inspection. All safety, cleaning, and cosmetic items.',
-        moveIn: 'Focus: Baseline condition record before tenant possession.',
-        moveOut: 'Focus: Damage vs. wear & tear assessment.'
-    };
-    
-    desc.textContent = descriptions[type] || '';
+    if (desc && descriptions[type]) {
+        desc.textContent = descriptions[type];
+    }
 }
 
 function generateAutoSummary() {
@@ -880,30 +893,21 @@ function generateAutoSummary() {
         return item && item.dataset.critical === 'true' && appState.items[itemId].status === 'fail';
     });
     
-    let summary = `On ${today}, a ${typeLabel.toLowerCase()} was conducted at ${appState.header.propAddress || 'the property'}. `;
+    criticalFail = criticalItems.length;
     
-    if (passCount > 0) {
-        summary += `${passCount} items passed inspection. `;
-    }
+    let summary = `On ${today}, a ${typeLabel} was conducted at ${appState.header.propAddress || 'the property'}. `;
     
-    if (failCount > 0) {
-        summary += `${failCount} items failed inspection. `;
-        
-        if (criticalFail > 0) {
-            summary += `CRITICAL: ${criticalFail} safety-critical items failed. `;
-        }
-    }
-    
-    if (appState.photos.length > 0) {
-        summary += `${appState.photos.length} photographic evidence files were captured. `;
-    }
+    if (passCount > 0) summary += `${passCount} items passed. `;
+    if (failCount > 0) summary += `${failCount} items failed. `;
+    if (criticalFail > 0) summary += `CRITICAL: ${criticalFail} safety-critical items failed. `;
+    if (appState.photos.length > 0) summary += `${appState.photos.length} photos captured. `;
     
     if (failCount === 0 && criticalFail === 0) {
-        summary += `The property meets all safety, habitability, and market-ready standards.`;
+        summary += `The property meets all standards.`;
     } else if (criticalFail > 0) {
         summary += `IMMEDIATE ACTION REQUIRED: Critical safety items must be addressed before listing.`;
     } else {
-        summary += `Non-critical deficiencies require follow-up within standard maintenance timelines.`;
+        summary += `Non-critical deficiencies require follow-up.`;
     }
     
     document.getElementById('finalNotes').value = summary;
@@ -911,19 +915,16 @@ function generateAutoSummary() {
 }
 
 function collectFormData() {
-    // Collect header
     document.querySelectorAll('[data-state-key]').forEach(field => {
         const key = field.dataset.stateKey;
         updateStateField(key, field.value);
     });
     
-    // Collect unit status
     const unitStatus = document.querySelector('input[name="unitStatus"]:checked');
     if (unitStatus) {
         appState.unitStatus = unitStatus.value;
     }
     
-    // Collect notes
     appState.deficiencyNotes = document.getElementById('deficiencyNotes').value;
     appState.finalNotes = document.getElementById('finalNotes').value;
 }
@@ -935,7 +936,6 @@ function confirmReset() {
 }
 
 function resetForm() {
-    // Clear state
     appState = {
         header: {
             propAddress: "",
@@ -955,80 +955,12 @@ function resetForm() {
         version: APP_CONFIG.VERSION
     };
     
-    // Clear localStorage
     localStorage.removeItem(APP_CONFIG.STORAGE.DRAFT_KEY);
-    
-    // Reset UI
     updateUIFromState();
     renderChecklist();
     renderPhotoGrid();
-    updatePhotoCounter();
-    
-    alert('Form reset successfully.');
+    window.location.reload();
 }
 
-// ============================================================================
-// MODAL FUNCTION - FIXED SCROLL ISSUE
-// ============================================================================
-
-function toggleReportModal(generate = true) {
-    const modal = document.getElementById('reportModal');
-    modal.classList.toggle('hidden');
-    
-    if (!modal.classList.contains('hidden')) {
-        // Generate report if requested
-        if (generate) {
-            generateReport();
-        }
-        
-        // Always scroll to top when opening modal (FIXED)
-        if (APP_CONFIG.UI.SMOOTH_SCROLL) {
-            setTimeout(() => {
-                modal.scrollTo({ top: 0, behavior: 'smooth' });
-            }, 10);
-        }
-    }
-}
-
-function showCriticalAlert(itemId) {
-    // In production, would show a modal alert
-    console.warn(`CRITICAL ITEM FAILED: ${itemId}`);
-    
-    // Visual feedback
-    const item = document.querySelector(`[data-item-id="${itemId}"]`);
-    if (item) {
-        item.style.animation = 'pulse 2s infinite';
-        setTimeout(() => {
-            item.style.animation = '';
-        }, 4000);
-    }
-}
-
-// Debounce helper
-let saveTimeout;
-function debouncedSave() {
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(saveDraft, 1000);
-}
-
-// ============================================================================
-// INITIALIZE APPLICATION
-// ============================================================================
-
-// Wait for DOM and dependencies
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initApp);
-} else {
-    initApp();
-}
-
-// Export for testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { 
-        appState, 
-        initApp, 
-        compressImage, 
-        generateReport,
-        generateAutoSummary
-    };
-}
+// Start the engine
+document.addEventListener('DOMContentLoaded', initApp);
