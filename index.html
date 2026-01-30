@@ -56,8 +56,12 @@
             overflow-y: auto;
         }
         
+        #reportModal.hidden {
+            display: none !important;
+        }
+        
         #reportModal:not(.hidden) {
-            display: flex;
+            display: flex !important;
             align-items: center;
             justify-content: center;
         }
@@ -75,6 +79,19 @@
         /* Smooth transitions */
         .smooth-transition {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Modal content styling */
+        .modal-content {
+            background: white;
+            max-width: 4xl;
+            width: 100;
+            margin-left: 1rem;
+            margin-right: 1rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            max-height: 90vh;
+            overflow-y: auto;
         }
     </style>
 </head>
@@ -183,7 +200,7 @@
                             Capture exterior, wide shots, damage evidence, serial numbers, etc.
                         </span>
                         <input type="file" id="bulkPhotoInput" accept="image/*" multiple 
-                               class="hidden" capture="environment">
+                               class="hidden">
                     </label>
                 </div>
                 
@@ -274,8 +291,8 @@
             <div class="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
                 <h3 class="font-bold text-gray-800">Report Preview</h3>
                 <div class="flex gap-2">
-                    <button onclick="document.getElementById('reportModal').classList.add('hidden')"
-                            class="px-3 py-1 text-sm border rounded smooth-transition">Edit</button>
+                    <button onclick="toggleReportModal()"
+                            class="px-3 py-1 text-sm border rounded smooth-transition">Close</button>
                     <button onclick="window.print()"
                             class="px-3 py-1 text-sm bg-blue-600 text-white rounded smooth-transition">
                         <i class="fas fa-print mr-1"></i> Print / PDF
@@ -293,7 +310,5 @@
     <script src="assets/data/schema.js"></script>
     <script src="assets/js/config.js"></script>
     <script src="assets/js/core.js"></script>
-    
-    <!-- CLARIFICATION REQUIRED: Logic for Canvas image compression algorithm is only referenced but not fully detailed in sources. Implementation will follow standard Canvas resizing pattern. -->
 </body>
 </html>
