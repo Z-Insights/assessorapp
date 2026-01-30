@@ -839,8 +839,8 @@ function generatePhotoEvidenceHTML() {
     }
     
     let html = '';
-    appState.photos.slice(0, 12).forEach(photo => {
-        // FIXED: Letterbox Container for Forensic Data Integrity
+    // FIXED: Removed slice(0, 12) limit. Now renders ALL photos.
+    appState.photos.forEach(photo => {
         html += `
             <div class="break-inside-avoid">
                 <div class="w-full aspect-square bg-gray-100 rounded border border-gray-200 flex items-center justify-center overflow-hidden">
