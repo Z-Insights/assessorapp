@@ -5,10 +5,8 @@
     <title>Leaso | Unified Field Assessor (Production Lite)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <style>
@@ -56,12 +54,8 @@
             overflow-y: auto;
         }
         
-        #reportModal.hidden {
-            display: none !important;
-        }
-        
         #reportModal:not(.hidden) {
-            display: flex !important;
+            display: flex;
             align-items: center;
             justify-content: center;
         }
@@ -80,24 +74,10 @@
         .smooth-transition {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        
-        /* Modal content styling */
-        .modal-content {
-            background: white;
-            max-width: 4xl;
-            width: 100;
-            margin-left: 1rem;
-            margin-right: 1rem;
-            border-radius: 0.5rem;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-            max-height: 90vh;
-            overflow-y: auto;
-        }
     </style>
 </head>
 <body class="min-h-screen bg-gray-50 text-gray-800 text-sm">
 
-    <!-- Header -->
     <header class="no-print bg-white border-b px-4 py-3 shadow-sm sticky top-0 z-40">
         <div class="flex justify-between items-center">
             <div>
@@ -116,10 +96,8 @@
         </div>
     </header>
 
-    <!-- Main Container -->
     <main class="max-w-4xl mx-auto p-4 space-y-6">
         
-        <!-- Inspection Header Card -->
         <section class="bg-white rounded-lg shadow-sm border p-5 smooth-transition">
             <h2 class="font-bold text-lg mb-4 text-gray-800 border-b pb-2">
                 <i class="fas fa-clipboard-check text-blue-600 mr-2"></i> Inspection Header
@@ -179,12 +157,9 @@
             </div>
         </section>
         
-        <!-- Dynamic Checklist Container -->
         <section id="checklistContainer" class="space-y-6">
-            <!-- Checklist will be injected here by core.js -->
-        </section>
+            </section>
         
-        <!-- Photo Evidence Section -->
         <section class="bg-white rounded-lg shadow-sm border p-5 smooth-transition">
             <h2 class="font-bold text-lg mb-4 text-gray-800 border-b pb-2">
                 <i class="fas fa-camera text-blue-600 mr-2"></i> Photo Evidence
@@ -199,8 +174,7 @@
                         <span class="block text-xs text-gray-500 mt-2">
                             Capture exterior, wide shots, damage evidence, serial numbers, etc.
                         </span>
-                        <input type="file" id="bulkPhotoInput" accept="image/*" multiple 
-                               class="hidden">
+                        <input type="file" id="bulkPhotoInput" accept="image/*" multiple class="hidden">
                     </label>
                 </div>
                 
@@ -218,13 +192,10 @@
                 </div>
             </div>
             
-            <!-- Photo Grid -->
             <div id="photoGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-                <!-- Photos will be injected here -->
-            </div>
+                </div>
         </section>
         
-        <!-- Notes Section -->
         <section class="bg-white rounded-lg shadow-sm border p-5 smooth-transition">
             <h2 class="font-bold text-lg mb-4 text-gray-800 border-b pb-2">
                 <i class="fas fa-sticky-note text-blue-600 mr-2"></i> Notes & Summary
@@ -273,7 +244,6 @@
         </section>
     </main>
 
-    <!-- Footer Actions -->
     <footer class="no-print bg-white border-t p-4 sticky bottom-0 z-30 shadow-lg">
         <div class="max-w-4xl mx-auto flex justify-between">
             <button id="btnReset" class="px-4 py-2 text-gray-600 hover:text-red-600 smooth-transition">
@@ -285,14 +255,13 @@
         </div>
     </footer>
 
-    <!-- Report Modal -->
     <div id="reportModal" class="hidden">
         <div class="bg-white max-w-4xl w-full mx-4 rounded-lg shadow-2xl max-h-[90vh] overflow-y-auto">
             <div class="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
                 <h3 class="font-bold text-gray-800">Report Preview</h3>
                 <div class="flex gap-2">
-                    <button onclick="toggleReportModal()"
-                            class="px-3 py-1 text-sm border rounded smooth-transition">Close</button>
+                    <button onclick="document.getElementById('reportModal').classList.add('hidden')"
+                            class="px-3 py-1 text-sm border rounded smooth-transition">Edit</button>
                     <button onclick="window.print()"
                             class="px-3 py-1 text-sm bg-blue-600 text-white rounded smooth-transition">
                         <i class="fas fa-print mr-1"></i> Print / PDF
@@ -300,12 +269,10 @@
                 </div>
             </div>
             <div id="reportContent" class="p-6">
-                <!-- Report will be injected here -->
-            </div>
+                </div>
         </div>
     </div>
 
-    <!-- Script Orchestration -->
     <script src="assets/data/properties.js"></script>
     <script src="assets/data/schema.js"></script>
     <script src="assets/js/config.js"></script>
