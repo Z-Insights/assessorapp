@@ -4,7 +4,7 @@
 
 const APP_CONFIG = {
     // Version & Branding
-    VERSION: "v2.1.0-PRODUCTION",
+    VERSION: "v2.1.1-PATCHED",
     BRAND_NAME: "Leaso Property Management",
     
     // Image Compression Settings (Optimized for mobile networks)
