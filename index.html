@@ -10,10 +10,34 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <style>
+        /* FIXED: Forensic Isolation Block for Printing */
         @media print {
-            body { background: white !important; margin: 0 !important; }
-            .no-print { display: none !important; }
-            #reportModal { display: block !important; position: static !important; }
+            /* 1. Global Reset: Hide everything by default */
+            body > * { display: none !important; }
+
+            /* 2. Exception: Force the Report Modal to be the only visible object */
+            #reportModal { 
+                display: block !important; 
+                position: absolute !important; 
+                top: 0; 
+                left: 0; 
+                width: 100%; 
+                margin: 0 !important; 
+                padding: 0 !important; 
+                background: white !important; 
+                z-index: 9999;
+            }
+
+            /* 3. Operational Integrity: Hide the Modal Toolbar (Close/Print buttons) */
+            #reportModal .sticky { display: none !important; }
+
+            /* 4. Restore visibility for the report content specifically */
+            #reportContent, #reportContent * { 
+                visibility: visible; 
+            }
+            
+            /* 5. Force background graphics for colored badges/headers */
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
         
         /* CRITICAL ALERT PULSE ANIMATION */
@@ -54,8 +78,12 @@
             overflow-y: auto;
         }
         
+        #reportModal.hidden {
+            display: none !important;
+        }
+        
         #reportModal:not(.hidden) {
-            display: flex;
+            display: flex !important;
             align-items: center;
             justify-content: center;
         }
@@ -73,6 +101,19 @@
         /* Smooth transitions */
         .smooth-transition {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Modal content styling */
+        .modal-content {
+            background: white;
+            max-width: 4xl;
+            width: 100;
+            margin-left: 1rem;
+            margin-right: 1rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            max-height: 90vh;
+            overflow-y: auto;
         }
     </style>
 </head>
@@ -174,7 +215,8 @@
                         <span class="block text-xs text-gray-500 mt-2">
                             Capture exterior, wide shots, damage evidence, serial numbers, etc.
                         </span>
-                        <input type="file" id="bulkPhotoInput" accept="image/*" multiple class="hidden">
+                        <input type="file" id="bulkPhotoInput" accept="image/*" multiple 
+                               class="hidden">
                     </label>
                 </div>
                 
@@ -260,8 +302,8 @@
             <div class="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
                 <h3 class="font-bold text-gray-800">Report Preview</h3>
                 <div class="flex gap-2">
-                    <button onclick="document.getElementById('reportModal').classList.add('hidden')"
-                            class="px-3 py-1 text-sm border rounded smooth-transition">Edit</button>
+                    <button onclick="toggleReportModal()"
+                            class="px-3 py-1 text-sm border rounded smooth-transition">Close</button>
                     <button onclick="window.print()"
                             class="px-3 py-1 text-sm bg-blue-600 text-white rounded smooth-transition">
                         <i class="fas fa-print mr-1"></i> Print / PDF
