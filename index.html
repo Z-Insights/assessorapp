@@ -10,34 +10,57 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <style>
-        /* FIXED: Forensic Isolation Block for Printing */
+        /* FIXED: Forensic Print Isolation Block (v2.1) */
         @media print {
-            /* 1. Global Reset: Hide everything by default */
-            body > * { display: none !important; }
+            /* 1. Reset Body Flow */
+            body { 
+                overflow: visible !important; 
+                height: auto !important; 
+                background: white !important;
+            }
 
-            /* 2. Exception: Force the Report Modal to be the only visible object */
+            /* 2. Hide all top-level elements except the modal */
+            body > *:not(#reportModal) { 
+                display: none !important; 
+            }
+
+            /* 3. Reset the Modal Wrapper (Remove Fixed Positioning) */
             #reportModal { 
                 display: block !important; 
-                position: absolute !important; 
-                top: 0; 
-                left: 0; 
-                width: 100%; 
+                position: static !important; /* Key fix: allows flow */
+                width: 100% !important; 
+                height: auto !important; 
                 margin: 0 !important; 
                 padding: 0 !important; 
-                background: white !important; 
+                overflow: visible !important;
+                background: white !important;
                 z-index: 9999;
+                inset: auto !important;
             }
 
-            /* 3. Operational Integrity: Hide the Modal Toolbar (Close/Print buttons) */
+            /* 4. Reset the Inner Content Card (Remove Scroll/Max-Height) */
+            #reportModal > div {
+                max-height: none !important; /* Key fix: stops cutoff */
+                overflow: visible !important; /* Key fix: shows all content */
+                box-shadow: none !important;
+                border: none !important;
+                margin: 0 !important;
+                width: 100% !important;
+                max-width: none !important;
+            }
+
+            /* 5. Hide the Toolbar inside the modal */
             #reportModal .sticky { display: none !important; }
 
-            /* 4. Restore visibility for the report content specifically */
+            /* 6. Ensure Content Visibility and Colors */
             #reportContent, #reportContent * { 
-                visibility: visible; 
+                visibility: visible !important; 
             }
-            
-            /* 5. Force background graphics for colored badges/headers */
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            
+            /* 7. Page Break Management */
+            .break-inside-avoid { break-inside: avoid; }
+            h2, h3 { break-after: avoid; }
         }
         
         /* CRITICAL ALERT PULSE ANIMATION */
@@ -123,7 +146,7 @@
         <div class="flex justify-between items-center">
             <div>
                 <p class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Leaso Property Management</p>
-                <h1 class="text-lg font-bold text-gray-900">Unified Field Assessor v2.0</h1>
+                <h1 class="text-lg font-bold text-gray-900">Unified Field Assessor v2.1</h1>
                 <p class="text-xs text-gray-500">Forensic Safety + Rent-Ready Protocol</p>
             </div>
             <div class="flex gap-2">
