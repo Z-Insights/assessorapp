@@ -840,10 +840,13 @@ function generatePhotoEvidenceHTML() {
     
     let html = '';
     appState.photos.slice(0, 12).forEach(photo => {
+        // FIXED: Letterbox Container for Forensic Data Integrity
         html += `
-            <div class="border rounded overflow-hidden break-inside-avoid">
-                <img src="${photo.data}" class="w-full h-32 object-cover" alt="${photo.caption}">
-                <div class="p-2 text-xs text-gray-600 truncate">${photo.caption}</div>
+            <div class="break-inside-avoid">
+                <div class="w-full aspect-square bg-gray-100 rounded border border-gray-200 flex items-center justify-center overflow-hidden">
+                    <img src="${photo.data}" class="max-w-full max-h-full object-contain" alt="${photo.caption}">
+                </div>
+                <div class="p-2 text-xs text-gray-600 truncate text-center">${photo.caption}</div>
             </div>
         `;
     });
