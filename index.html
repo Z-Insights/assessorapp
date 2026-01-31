@@ -316,13 +316,15 @@ data-state-key="finalNotes"></textarea>
 </section>
 </main>
 <footer class="no-print bg-white border-t p-4 sticky bottom-0 z-30 shadow-lg">
-<div class="max-w-4xl mx-auto flex justify-between">
-<button id="btnReset" class="px-4 py-2 text-gray-600 hover:text-red-600 smooth-transition">
-<i class="fas fa-undo mr-1"></i> Reset Form
-</button>
-<button id="btnGenerateReport" class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 smooth-transition">
-<i class="fas fa-file-pdf mr-2"></i> Generate Official Report
-</button>
+<!-- NEW: Import/Export Buttons Row (conditionally shown) -->
+<div id="baselineActionsRow" class="flex justify-center gap-2 hidden mt-3">
+    <button id="btnExportBaseline" class="px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 smooth-transition hidden">
+        <i class="fas fa-download mr-1"></i> Export Baseline (.json)
+    </button>
+    <button id="btnImportBaseline" class="px-3 py-1.5 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 smooth-transition hidden">
+        <i class="fas fa-upload mr-1"></i> Import Baseline (.json)
+    </button>
+    <input type="file" id="importBaselineInput" accept=".json" class="hidden">
 </div>
 </footer>
 <div id="reportModal" class="hidden">
