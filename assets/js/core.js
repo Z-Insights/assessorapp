@@ -1,5 +1,5 @@
 // FILE: core.js
-// CLASSIFICATION: The Engine - State Management, Rendering, Compression, Reporting + Delta Report
+// CLASSIFICATION: The Engine - State Management, Rendering, Compression, Reporting + Delta Report + QR Code
 // PURPOSE: Executable processor that brings the app to life with forensic Move-In/Move-Out capability
 // ============================================================================
 // GLOBAL STATE & INITIALIZATION
@@ -446,7 +446,8 @@ localStorage.setItem(key, JSON.stringify(history.slice(-1)));
  */
 function loadMoveInReference() {
 const propAddress = appState.header.propAddress;
-if (!propAddress || appState.header.inspectionType !== 'moveOut') {appState.moveInReference = null;
+if (!propAddress || appState.header.inspectionType !== 'moveOut') {
+appState.moveInReference = null;
 document.getElementById('btnGenerateDelta')?.classList.add('hidden');
 return;
 }
@@ -456,30 +457,36 @@ const key = `inspection_history_${sanitizeAddress(propAddress)}`;
 const history = JSON.parse(localStorage.getItem(key) || '[]');
 const moveInRecords = history.filter(rec => rec.type === 'moveIn');
 if (moveInRecords.length > 0) {
-// Get most recent Move-In
+// Found in localStorage
 const recentMoveIn = moveInRecords[moveInRecords.length - 1];
 appState.moveInReference = {
 reportId: recentMoveIn.reportId,
 date: recentMoveIn.date,
 propAddress: propAddress,
-keyItems: recentMoveIn.keyItems
+keyItems: recentMoveIn.keyItems,
+source: 'localStorage'
 };
-// Show Delta button with tooltip
 const deltaBtn = document.getElementById('btnGenerateDelta');
 if (deltaBtn) {
 deltaBtn.classList.remove('hidden');
-deltaBtn.title = `Loaded Move-In baseline: ${recentMoveIn.reportId} (${recentMoveIn.date})`;
+deltaBtn.title = `Loaded baseline from localStorage: ${recentMoveIn.reportId}`;
 }
-console.log(`Loaded Move-In reference: ${recentMoveIn.reportId}`);
+// Hide import button when localStorage data found
+document.getElementById('btnImportBaseline')?.classList.add('hidden');
 } else {
+// No localStorage data - show import button
 appState.moveInReference = null;
 document.getElementById('btnGenerateDelta')?.classList.add('hidden');
-// Show helpful message
+document.getElementById('btnImportBaseline')?.classList.remove('hidden');
 if (document.getElementById('typeDescription')) {
 document.getElementById('typeDescription').innerHTML = 
-`<span class="text-red-600 font-bold">⚠️ NO MOVE-IN BASELINE FOUND</span><br>` +
-`Complete a Move-In inspection first to enable Delta Report capability.`;
+`<span class="text-orange-600 font-bold">📁 NO LOCAL STORAGE DATA FOUND</span><br>` +
+`<span class="text-sm">Click "Import Baseline" to upload saved file OR scan QR code from Move-In report.</span>`;
 }
+}
+// Show export button for Move-In inspections
+if (appState.header.inspectionType === 'moveIn') {
+document.getElementById('btnExportBaseline')?.classList.remove('hidden');
 }
 }, 100); // Small delay to ensure UI is ready
 }
@@ -499,7 +506,6 @@ const moveInHydro = appState.moveInReference.keyItems.hydro_meter || 'Not record
 const moveOutHydroItem = appState.items['hydro_meter_final'] || appState.items['hydro_meter_reading'];
 const moveOutHydro = moveOutHydroItem?.note || 'Not recorded';
 if (moveOutHydro !== 'Not recorded' && moveInHydro !== 'Not recorded') {
-// Attempt to calculate consumption if both are numeric
 const inVal = parseFloat(moveInHydro);
 const outVal = parseFloat(moveOutHydro);
 if (!isNaN(inVal) && !isNaN(outVal) && outVal > inVal) {
@@ -510,7 +516,7 @@ item: "Electricity Consumption",
 moveIn: `Reading: ${moveInHydro} kWh`,
 moveOut: `Reading: ${moveOutHydro} kWh`,
 delta: `Consumption: ${consumption.toFixed(1)} kWh`,
-claimAmount: 0, // Actual cost requires rate - set to 0 for now
+claimAmount: 0,
 evidence: "Photo of final meter reading required"
 });
 }
@@ -522,7 +528,7 @@ const issued = parseInt(moveInKeys) || 0;
 const returned = parseInt(moveOutKeys) || 0;
 const missing = issued - returned;
 if (missing > 0) {
-const keyCost = missing * 25; // Standard replacement cost
+const keyCost = missing * 25;
 comparisons.push({
 category: "Access Control",
 item: "Missing Keys/Fobs",
@@ -544,7 +550,8 @@ damageItems.forEach(item => {
 const moveOutState = appState.items[item.id];
 if (moveOutState?.status === 'fail' && 
 (moveOutState.note?.toLowerCase().includes('new') || 
-moveOutState.note?.toLowerCase().includes('not in move-in') || moveOutState.note?.toLowerCase().includes('undue'))) {
+moveOutState.note?.toLowerCase().includes('not in move-in') ||
+moveOutState.note?.toLowerCase().includes('undue'))) {
 comparisons.push({
 category: "Surface Integrity",
 item: item.label,
@@ -598,6 +605,206 @@ filingDeadline: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).t
 };
 appState.deltaReport = deltaReport;
 return deltaReport;
+}
+
+// ============================================================================
+// QR CODE & EXPORT/IMPORT FUNCTIONS
+// ============================================================================
+/**
+ * Generate Move-In Baseline Data Object
+ */
+function generateMoveInBaselineData() {
+if (appState.header.inspectionType !== 'moveIn') {
+throw new Error('Baseline can only be generated for Move-In inspections');
+}
+const baselineData = {
+type: 'moveInBaseline',
+version: APP_CONFIG.VERSION,
+generatedDate: new Date().toISOString(),
+property: {
+address: appState.header.propAddress,
+unit: appState.header.unitRef,
+city: appState.header.cityRegion
+},
+inspection: {
+date: appState.header.inspectDate,
+assessor: appState.header.assessorName,
+tenant: appState.header.tenantName,
+reportId: generateReportId()
+},
+keyItems: {
+hydro_meter: appState.items['hydro_meter_reading']?.note || '',
+water_gas_meter: appState.items['water_gas_meter']?.note || '',
+keys_issued: appState.items['keys_issued_count']?.note || '',
+thermostat_setting: appState.items['thermostat_baseline']?.note || ''
+},
+criticalItems: {
+smoke_co: appState.items['smoke_co_baseline']?.status || '',
+entry_security: appState.items['entry_security_baseline']?.status || ''
+},
+summary: appState.finalNotes || '',
+photoCount: appState.photos.length
+};
+return baselineData;}
+
+/**
+ * Export Move-In Baseline to JSON file
+ */
+function exportMoveInBaseline() {
+try {
+const baselineData = generateMoveInBaselineData();
+// Convert to JSON and trigger download
+const dataStr = "text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(baselineData, null, 2));
+const downloadAnchorNode = document.createElement('a');
+downloadAnchorNode.setAttribute("href", dataStr);
+downloadAnchorNode.setAttribute("download", `MoveIn_Baseline_${sanitizeAddress(baselineData.property.address)}_${baselineData.inspection.date}.json`);
+document.body.appendChild(downloadAnchorNode);
+downloadAnchorNode.click();
+downloadAnchorNode.remove();
+// Visual feedback
+const btn = document.getElementById('btnExportBaseline');
+if (btn) {
+btn.innerHTML = '<i class="fas fa-check mr-1"></i> Exported!';
+btn.classList.replace('bg-green-600', 'bg-blue-600');
+setTimeout(() => {
+btn.innerHTML = '<i class="fas fa-download mr-1"></i> Export Baseline (.json)';
+btn.classList.replace('bg-blue-600', 'bg-green-600');
+}, 2000);
+}
+console.log('Move-In baseline exported successfully');
+} catch (error) {
+console.error('Export failed:', error);
+alert(`Failed to export baseline: ${error.message}`);
+}
+}
+
+/**
+ * Import Move-In Baseline from JSON file
+ */
+function importMoveInBaseline(file) {
+const reader = new FileReader();
+reader.onload = function(e) {
+try {
+const baselineData = JSON.parse(e.target.result);
+// Validate the imported data
+if (baselineData.type !== 'moveInBaseline') {
+throw new Error('Invalid file format. Please select a Move-In Baseline file.');
+}
+// Optional: Warn if property address doesn't match
+if (baselineData.property.address !== appState.header.propAddress) {
+if (!confirm(`This baseline is for ${baselineData.property.address}, but you're inspecting ${appState.header.propAddress}. Continue anyway?`)) {
+return;
+}}
+// Load the baseline data into appState
+appState.moveInReference = {
+reportId: baselineData.inspection.reportId,
+date: baselineData.inspection.date,
+propAddress: baselineData.property.address,
+keyItems: baselineData.keyItems,
+criticalItems: baselineData.criticalItems,
+imported: true,
+importedDate: new Date().toISOString(),
+source: 'imported_file'
+};
+// Show success message
+alert(`✅ Move-In Baseline loaded successfully!\nReport ID: ${baselineData.inspection.reportId}\nDate: ${baselineData.inspection.date}\nAssessor: ${baselineData.inspection.assessor}`);
+// Show Delta Report button
+const deltaBtn = document.getElementById('btnGenerateDelta');
+if (deltaBtn) {
+deltaBtn.classList.remove('hidden');
+deltaBtn.title = `Loaded imported baseline: ${baselineData.inspection.reportId}`;
+}
+// Hide import button, show export button
+document.getElementById('btnImportBaseline')?.classList.add('hidden');
+document.getElementById('btnExportBaseline')?.classList.add('hidden');
+console.log('Move-In baseline imported successfully');
+} catch (error) {
+console.error('Import failed:', error);
+alert(`Failed to import baseline: ${error.message}`);
+}
+};
+reader.onerror = function() {
+alert('Failed to read the file. Please try again.');
+};
+reader.readAsText(file);
+}
+
+/**
+ * Generate QR Code for Move-In Baseline
+ */
+function generateBaselineQRCode() {
+try {
+const baselineData = generateMoveInBaselineData();
+const qrData = JSON.stringify(baselineData);
+// Create QR code element
+const qrContainer = document.createElement('div');
+qrContainer.id = 'baselineQRCode';
+qrContainer.className = 'text-center p-4';
+qrContainer.innerHTML = `
+<h3 class="font-bold text-lg mb-2">Move-In Baseline QR Code</h3>
+<p class="text-sm text-gray-600 mb-4">Scan with any QR code scanner or phone camera</p>
+<div id="qrCanvas" class="inline-block bg-white p-4 rounded-lg shadow-md"></div>
+<p class="text-xs text-gray-500 mt-2">Report ID: ${baselineData.inspection.reportId}</p>
+<p class="text-xs text-gray-500">Generated: ${new Date().toLocaleString()}</p>
+`;
+// Generate QR code (will be called after element is in DOM)
+setTimeout(() => {
+new QRCode(document.getElementById("qrCanvas"), {
+text: qrData,
+width: 200,
+height: 200,
+correctLevel: QRCode.CorrectLevel.H // High error correction
+});
+}, 100);
+return qrContainer;
+} catch (error) {
+console.error('QR Code generation failed:', error);
+return null;
+}
+}
+
+/**
+ * Generate JSON Data Page for Report
+ */
+function generateJSONDataPage() {
+try {
+const baselineData = generateMoveInBaselineData();
+return `
+<div class="page-break" style="page-break-before: always;">
+<div class="border-b-4 border-purple-600 pb-4 mb-6">
+<h2 class="text-2xl font-bold text-gray-900 flex items-center">
+<i class="fas fa-file-code text-purple-700 mr-3"></i>
+Move-In Baseline Data (JSON)
+</h2>
+<p class="text-sm text-gray-600 mt-2">
+This JSON data can be imported into the Assessor App for Move-Out inspections.
+Copy the entire content below or scan the QR code on the previous page.
+</p>
+</div>
+<div class="bg-gray-900 text-green-400 p-6 rounded-lg font-mono text-xs overflow-x-auto max-h-[70vh]">
+<pre id="jsonDataDisplay">${JSON.stringify(baselineData, null, 2)}</pre>
+</div>
+<div class="mt-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-r">
+<h3 class="font-bold text-yellow-900 mb-2">How to Use This Data:</h3>
+<ol class="list-decimal list-inside space-y-2 text-sm text-yellow-800">
+<li><strong>Option 1 (QR Code):</strong> Scan the QR code on the previous page with any phone camera or QR scanner</li>
+<li><strong>Option 2 (Copy/Paste):</strong> Select all text above (Ctrl+A), copy (Ctrl+C), and paste into a .json file</li>
+<li><strong>Option 3 (Save File):</strong> Use the "Export Baseline" button in the app to download this data as a .json file</li>
+</ol>
+<p class="mt-3 font-bold text-yellow-900">
+<i class="fas fa-exclamation-triangle mr-2"></i>
+Keep this report safe! You'll need this data for Move-Out inspections.</p>
+</div>
+<div class="mt-6 text-center text-xs text-gray-500">
+<p>Report ID: ${baselineData.inspection.reportId} | Generated: ${new Date().toLocaleString()}</p>
+<p>Property: ${baselineData.property.address}, ${baselineData.property.unit || 'N/A'}</p>
+</div>
+</div>
+`;
+} catch (error) {
+console.error('JSON page generation failed:', error);
+return '';
+}
 }
 
 // ============================================================================
@@ -735,8 +942,7 @@ const wrapper = document.createElement('div');
 wrapper.className = 'relative group';
 const img = document.createElement('img');
 img.src = photo.data;
-img.className = 'photo-thumbnail w-full h-24 object-cover';
-img.alt = photo.caption;
+img.className = 'photo-thumbnail w-full h-24 object-cover';img.alt = photo.caption;
 const overlay = document.createElement('div');
 overlay.className = 'absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center';
 const deleteBtn = document.createElement('button');
@@ -785,8 +991,7 @@ counter.className = 'ml-2 text-xs bg-gray-200 px-2 py-1 rounded';
 // ============================================================================
 // STORAGE & PERSISTENCE
 // ============================================================================
-// Debounce wrapper to prevent too many saves
-let saveTimeout;
+// Debounce wrapper to prevent too many saveslet saveTimeout;
 function debouncedSave() {
 clearTimeout(saveTimeout);
 saveTimeout = setTimeout(saveDraft, 1000);
@@ -835,8 +1040,7 @@ console.log('Draft loaded successfully');
 return true;
 }
 }
-} catch (error) {
-console.warn('Failed to load draft:', error);
+} catch (error) {console.warn('Failed to load draft:', error);
 }
 return false;
 }
@@ -885,7 +1089,6 @@ return false;
 }
 return true;
 }
-
 function generateReport() {
 try {
 // Validate before generating
@@ -943,7 +1146,8 @@ let reportHTML = `
 <p class="text-xs font-bold text-gray-500 uppercase">Tenant Reference</p>
 <p>${appState.header.tenantName || 'Vacant / N/A'}</p>
 </div>
-</div><div>
+</div>
+<div>
 <h2 class="text-lg font-bold border-b pb-2 mb-3 text-gray-800">
 <i class="fas fa-chart-line mr-2"></i>Executive Summary
 </h2>
@@ -984,8 +1188,7 @@ Full Move-In report serves as legal evidence of initial condition per LTB guidel
 </div>
 `;
 if (delta.comparisons.length > 0) {
-reportHTML += `
-<div class="overflow-x-auto mb-6">
+reportHTML += `<div class="overflow-x-auto mb-6">
 <table class="min-w-full bg-white border border-gray-200">
 <thead class="bg-gray-100">
 <tr>
@@ -1034,8 +1237,7 @@ ${comp.claimAmount > 0 ? `$${comp.claimAmount.toFixed(2)}` : '-'}
 <li>✓ Vendor quotes for repair costs (attach separately)</li>
 </ul>
 </li>
-<li><strong>Strategic Note:</strong> LTB adjudicators require clear comparison between Move-In and Move-Out conditions. 
-This Delta Report provides the forensic narrative required for successful claims per Doucette-Grasby v. Lacey precedent.</li>
+<li><strong>Strategic Note:</strong> LTB adjudicators require clear comparison between Move-In and Move-Out conditions. This Delta Report provides the forensic narrative required for successful claims per Doucette-Grasby v. Lacey precedent.</li>
 </ul>
 </div>
 `;
@@ -1048,6 +1250,48 @@ reportHTML += `
 `;
 }
 reportHTML += `</div>`;
+}
+// === NEW: ADD QR CODE & JSON PAGES FOR MOVE-IN INSPECTIONS ===
+if (appState.header.inspectionType === 'moveIn') {
+// Generate QR Code section
+reportHTML += `
+<div class="page-break" style="page-break-before: always;">
+<div class="border-b-4 border-green-600 pb-4 mb-6">
+<h2 class="text-2xl font-bold text-gray-900 flex items-center">
+<i class="fas fa-qrcode text-green-700 mr-3"></i>
+Move-In Baseline Backup
+</h2>
+<p class="text-sm text-gray-600 mt-2">
+This QR code contains all baseline data needed for future Move-Out inspections. 
+Keep this report safe and accessible.
+</p>
+</div>
+<div class="bg-green-50 border-2 border-green-200 rounded-lg p-6 text-center">
+<div id="qrCanvasReport" class="inline-block bg-white p-6 rounded-lg shadow-xl"></div>
+<p class="mt-4 text-sm text-gray-700 font-bold">
+Scan this QR code with any phone camera or QR scanner to import baseline data
+</p>
+<p class="text-xs text-gray-500 mt-2">
+Report ID: ${generateReportId()} | Generated: ${new Date().toLocaleString()}
+</p>
+</div>
+<div class="mt-6 p-4 bg-blue-50 border-l-4 border-blue-400 rounded-r">
+<h3 class="font-bold text-blue-900 mb-2">How to Use This QR Code:</h3>
+<ol class="list-decimal list-inside space-y-2 text-sm text-blue-800">
+<li><strong>Save this PDF report</strong> in a secure location (cloud storage, company drive, email)</li>
+<li><strong>At Move-Out inspection</strong> (6-24 months later), open the Assessor App</li>
+<li><strong>Scan this QR code</strong> using your phone's camera or any QR scanner app</li>
+<li><strong>Copy the JSON data</strong> that appears and paste it into the import field</li>
+<li><strong>OR use the "Import Baseline" button</strong> and upload the .json file you exported</li>
+</ol>
+<p class="mt-3 text-xs italic text-blue-700">
+<i class="fas fa-lightbulb mr-1"></i>
+Pro Tip: Also click "Export Baseline (.json)" button to download a separate .json file as backup.</p>
+</div>
+</div>
+`;
+// Generate JSON Data section (separate page)
+reportHTML += generateJSONDataPage();
 }
 reportHTML += `
 <div class="pt-6 border-t text-center">
@@ -1067,6 +1311,28 @@ This report is an official property management record.
 </div>
 `;
 reportContent.innerHTML = reportHTML;
+// === Generate QR Code after DOM is ready ===
+if (appState.header.inspectionType === 'moveIn') {
+setTimeout(() => {
+try {
+const baselineData = generateMoveInBaselineData();
+const qrData = JSON.stringify(baselineData);
+// Clear any existing QR code
+const existingQR = document.getElementById('qrCanvasReport');
+if (existingQR) {
+existingQR.innerHTML = '';
+new QRCode(existingQR, {
+text: qrData,
+width: 250,
+height: 250,
+correctLevel: QRCode.CorrectLevel.H
+});
+}
+} catch (error) {
+console.error('QR Code generation in report failed:', error);
+}
+}, 100);
+}
 // 4. Show Modal
 showReportModal();
 // 5. AFTER REPORT GENERATION: Save completed inspection to history (for Move-In/Move-Out only)
@@ -1119,8 +1385,7 @@ return html || '<p class="text-gray-500 italic">No findings recorded.</p>';
 function generatePhotoEvidenceHTML() {
 if (appState.photos.length === 0) {
 return '<p class="col-span-3 text-gray-500 italic text-center py-4">No photos attached</p>';
-}
-let html = '';
+}let html = '';
 appState.photos.forEach(photo => {
 html += `
 <div class="break-inside-avoid">
@@ -1143,6 +1408,7 @@ hash = hash & hash;
 }
 return `LPM-${Math.abs(hash).toString(36).substr(0, 8).toUpperCase()}`;
 }
+
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
@@ -1168,8 +1434,7 @@ desc.textContent = APP_CONFIG.INSPECTION_TYPES[type] || '';
 }
 
 function generateAutoSummary() {
-const type = appState.header.inspectionType || 'routine';
-const typeLabel = APP_CONFIG.INSPECTION_TYPES[type];
+const type = appState.header.inspectionType || 'routine';const typeLabel = APP_CONFIG.INSPECTION_TYPES[type];
 const today = appState.header.inspectDate || new Date().toISOString().split('T')[0];
 // Count statuses
 let passCount = 0, failCount = 0, criticalFail = 0;
@@ -1191,7 +1456,8 @@ if (appState.photos.length > 0) summary += `${appState.photos.length} photos cap
 if (failCount === 0 && criticalFail === 0) {
 summary += `The property meets all standards.`;
 } else if (criticalFail > 0) {
-summary += `IMMEDIATE ACTION REQUIRED: Critical safety items must be addressed before listing.`;} else {
+summary += `IMMEDIATE ACTION REQUIRED: Critical safety items must be addressed before listing.`;
+} else {
 summary += `Non-critical deficiencies require follow-up.`;
 }
 // Add Delta Report context if applicable
@@ -1217,8 +1483,7 @@ if (unitStatus) {
 appState.unitStatus = unitStatus.value;
 }
 appState.deficiencyNotes = document.getElementById('deficiencyNotes').value;
-appState.finalNotes = document.getElementById('finalNotes').value;
-}
+appState.finalNotes = document.getElementById('finalNotes').value;}
 
 function confirmReset() {
 if (!APP_CONFIG.UI.CONFIRM_RESET || confirm('Clear all inspection data? This cannot be undone.')) {
@@ -1251,7 +1516,6 @@ localStorage.removeItem(APP_CONFIG.STORAGE.DRAFT_KEY);
 updateUIFromState();
 renderChecklist();
 renderPhotoGrid();
-// Reload page to clear all state
 window.location.reload();
 }
 
