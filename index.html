@@ -1,346 +1,386 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Leaso | Unified Field Assessor (Production Lite)</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    
-    <style>
-        /* FIXED: Forensic Print Isolation Block (v2.1) */
-        @media print {
-            /* 1. Reset Body Flow */
-            body { 
-                overflow: visible !important; 
-                height: auto !important; 
-                background: white !important;
-            }
-
-            /* 2. Hide all top-level elements except the modal */
-            body > *:not(#reportModal) { 
-                display: none !important; 
-            }
-
-            /* 3. Reset the Modal Wrapper (Remove Fixed Positioning) */
-            #reportModal { 
-                display: block !important; 
-                position: static !important; /* Key fix: allows flow */
-                width: 100% !important; 
-                height: auto !important; 
-                margin: 0 !important; 
-                padding: 0 !important; 
-                overflow: visible !important;
-                background: white !important;
-                z-index: 9999;
-                inset: auto !important;
-            }
-
-            /* 4. Reset the Inner Content Card (Remove Scroll/Max-Height) */
-            #reportModal > div {
-                max-height: none !important; /* Key fix: stops cutoff */
-                overflow: visible !important; /* Key fix: shows all content */
-                box-shadow: none !important;
-                border: none !important;
-                margin: 0 !important;
-                width: 100% !important;
-                max-width: none !important;
-            }
-
-            /* 5. Hide the Toolbar inside the modal */
-            #reportModal .sticky { display: none !important; }
-
-            /* 6. Ensure Content Visibility and Colors */
-            #reportContent, #reportContent * { 
-                visibility: visible !important; 
-            }
-            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-            
-            /* 7. Page Break Management */
-            .break-inside-avoid { break-inside: avoid; }
-            h2, h3 { break-after: avoid; }
-        }
-        
-        /* CRITICAL ALERT PULSE ANIMATION */
-        @keyframes pulse {
-            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
-            70% { transform: scale(1.02); box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
-            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
-        }
-        
-        .check-item { 
-            transition: all 0.2s ease;
-            border-left: 4px solid transparent;
-        }
-        
-        .check-item[data-critical="true"] { 
-            border-left-color: #DC2626;
-            background: linear-gradient(90deg, rgba(220, 38, 38, 0.05) 0%, rgba(220, 38, 38, 0.02) 100%);
-        }
-        
-        .photo-thumbnail {
-            width: 80px;
-            height: 80px;
-            object-fit: cover;
-            border-radius: 4px;
-            border: 1px solid #E5E7EB;
-        }
-        
-        .status-pass { background-color: #DCFCE7; color: #166534; }
-        .status-fail { background-color: #FEE2E2; color: #991B1B; }
-        .status-na { background-color: #F3F4F6; color: #6B7280; }
-        
-        #reportModal {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 1000;
-            overflow-y: auto;
-        }
-        
-        #reportModal.hidden {
-            display: none !important;
-        }
-        
-        #reportModal:not(.hidden) {
-            display: flex !important;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        /* Loading animation for async operations */
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .loading-spinner {
-            animation: spin 1s linear infinite;
-        }
-        
-        /* Smooth transitions */
-        .smooth-transition {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        /* Modal content styling */
-        .modal-content {
-            background: white;
-            max-width: 4xl;
-            width: 100;
-            margin-left: 1rem;
-            margin-right: 1rem;
-            border-radius: 0.5rem;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>Leaso | Unified Field Assessor (Production Lite)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+/* FIXED: Forensic Print Isolation Block (v2.2) */
+@media print {
+/* 1. Reset Body Flow */
+body {
+overflow: visible !important;
+height: auto !important;
+background: white !important;
+}
+/* 2. Hide all top-level elements except the modal */
+body > *:not(#reportModal) {
+display: none !important;
+}
+/* 3. Reset the Modal Wrapper (Remove Fixed Positioning) */
+#reportModal {
+display: block !important;
+position: static !important; /* Key fix: allows flow */
+width: 100% !important;
+height: auto !important;
+margin: 0 !important;
+padding: 0 !important;
+overflow: visible !important;
+background: white !important;
+z-index: 9999;
+inset: auto !important;
+}
+/* 4. Reset the Inner Content Card (Remove Scroll/Max-Height) */
+#reportModal > div {
+max-height: none !important; /* Key fix: stops cutoff */
+overflow: visible !important; /* Key fix: shows all content */
+box-shadow: none !important;
+border: none !important;
+margin: 0 !important;
+width: 100% !important;
+max-width: none !important;
+}
+/* 5. Hide the Toolbar inside the modal */
+#reportModal .sticky { display: none !important; }
+/* 6. Ensure Content Visibility and Colors */
+#reportContent, #reportContent * {
+visibility: visible !important;
+}* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+/* 7. Page Break Management */
+.break-inside-avoid { break-inside: avoid; }
+h2, h3 { break-after: avoid; }
+table { page-break-inside: auto; }
+tr { page-break-inside: avoid; page-break-after: auto; }
+thead { display: table-header-group; }
+tfoot { display: table-footer-group; }
+#reportContent {
+min-height: 100vh;
+padding-bottom: 2cm;
+}
+.border-purple-600 {
+page-break-before: always;
+}
+}
+/* CRITICAL ALERT PULSE ANIMATION */
+@keyframes pulse {
+0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+70% { transform: scale(1.02); box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+.check-item {
+transition: all 0.2s ease;
+border-left: 4px solid transparent;
+}
+.check-item[data-critical="true"] {
+border-left-color: #DC2626;
+background: linear-gradient(90deg, rgba(220, 38, 38, 0.05) 0%, rgba(220, 38, 38, 0.02) 100%);
+}
+.photo-thumbnail {
+width: 80px;
+height: 80px;
+object-fit: cover;
+border-radius: 4px;
+border: 1px solid #E5E7EB;
+}
+.status-pass { background-color: #DCFCE7; color: #166534; }
+.status-fail { background-color: #FEE2E2; color: #991B1B; }
+.status-na { background-color: #F3F4F6; color: #6B7280; }
+.status-repair { background-color: #FEF3C7; color: #92400E; }
+#reportModal {
+display: none;
+position: fixed;
+inset: 0;
+background: rgba(0, 0, 0, 0.9);
+z-index: 1000;
+overflow-y: auto;
+}
+#reportModal.hidden {display: none !important;
+}
+#reportModal:not(.hidden) {
+display: flex !important;
+align-items: center;
+justify-content: center;
+}
+/* Loading animation for async operations */
+@keyframes spin {
+0% { transform: rotate(0deg); }
+100% { transform: rotate(360deg); }
+}
+.loading-spinner {
+animation: spin 1s linear infinite;
+}
+/* Smooth transitions */
+.smooth-transition {
+transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* Modal content styling */
+.modal-content {
+background: white;
+max-width: 4xl;
+width: 100;
+margin-left: 1rem;
+margin-right: 1rem;
+border-radius: 0.5rem;
+box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+max-height: 90vh;
+overflow-y: auto;
+}
+/* Delta Report Banner */
+#deltaReportBanner {
+transition: all 0.3s ease;
+}
+/* Inspection History Badge */
+.inspection-history-badge {
+display: inline-block;
+padding: 0.25rem 0.75rem;
+border-radius: 9999px;
+font-size: 0.75rem;
+font-weight: 600;
+margin-left: 0.5rem;
+}
+</style>
 </head>
 <body class="min-h-screen bg-gray-50 text-gray-800 text-sm">
-
-    <header class="no-print bg-white border-b px-4 py-3 shadow-sm sticky top-0 z-40">
-        <div class="flex justify-between items-center">
-            <div>
-                <p class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Leaso Property Management</p>
-                <h1 class="text-lg font-bold text-gray-900">Unified Field Assessor v2.1</h1>
-                <p class="text-xs text-gray-500">Forensic Safety + Rent-Ready Protocol</p>
-            </div>
-            <div class="flex gap-2">
-                <button id="btnSaveDraft" class="px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50 smooth-transition">
-                    <i class="fas fa-save mr-1"></i> Save
-                </button>
-                <button id="btnShowReport" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 smooth-transition">
-                    <i class="fas fa-file-contract mr-1"></i> Report
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <main class="max-w-4xl mx-auto p-4 space-y-6">
-        
-        <section class="bg-white rounded-lg shadow-sm border p-5 smooth-transition">
-            <h2 class="font-bold text-lg mb-4 text-gray-800 border-b pb-2">
-                <i class="fas fa-clipboard-check text-blue-600 mr-2"></i> Inspection Header
-            </h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1">Property Address</label>
-                    <input type="text" id="propAddress" list="propertyList" 
-                           class="w-full border rounded px-3 py-2 text-sm smooth-transition" 
-                           placeholder="Start typing address..." 
-                           data-state-key="propAddress">
-                    <datalist id="propertyList"></datalist>
-                </div>
-                
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1">Unit / Area</label>
-                    <input type="text" id="unitRef" class="w-full border rounded px-3 py-2 text-sm smooth-transition" 
-                           placeholder="Unit # / Common Area" data-state-key="unitRef">
-                </div>
-                
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1">City / Region</label>
-                    <input type="text" id="cityRegion" class="w-full border rounded px-3 py-2 text-sm smooth-transition" 
-                           placeholder="City" data-state-key="cityRegion">
-                </div>
-                
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1">Inspection Date</label>
-                    <input type="date" id="inspectDate" class="w-full border rounded px-3 py-2 text-sm smooth-transition"
-                           data-state-key="inspectDate">
-                </div>
-                
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1">Runner / Assessor</label>
-                    <input type="text" id="assessorName" class="w-full border rounded px-3 py-2 text-sm smooth-transition" 
-                           placeholder="Your Name" data-state-key="assessorName">
-                </div>
-                
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1">Tenant Reference (Optional)</label>
-                    <input type="text" id="tenantName" class="w-full border rounded px-3 py-2 text-sm smooth-transition" 
-                           placeholder="Last Name / Vacant" data-state-key="tenantName">
-                </div>
-                
-                <div class="md:col-span-2">
-                    <label class="block text-xs font-bold text-gray-600 mb-1">Inspection Type</label>
-                    <select id="inspectionType" class="w-full border rounded px-3 py-2 text-sm font-medium smooth-transition"
-                            data-state-key="inspectionType">
-                        <option value="routine">Routine / Periodic (Safety Focus)</option>
-                        <option value="turnover">Rent-Ready / Turnover (Forensic)</option>
-                        <option value="moveIn">Move-In (Baseline)</option>
-                        <option value="moveOut">Move-Out (Damage Assessment)</option>
-                    </select>
-                    <p id="typeDescription" class="text-xs text-gray-500 mt-1 italic"></p>
-                </div>
-            </div>
-        </section>
-        
-        <section id="checklistContainer" class="space-y-6">
-            </section>
-        
-        <section class="bg-white rounded-lg shadow-sm border p-5 smooth-transition">
-            <h2 class="font-bold text-lg mb-4 text-gray-800 border-b pb-2">
-                <i class="fas fa-camera text-blue-600 mr-2"></i> Photo Evidence
-                <span id="photoCounter" class="ml-2 text-xs bg-gray-200 px-2 py-1 rounded smooth-transition">0/25</span>
-            </h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    <label class="block w-full border-2 border-dashed border-blue-400 rounded-lg p-6 text-center cursor-pointer hover:bg-blue-50 transition smooth-transition">
-                        <i class="fas fa-cloud-upload-alt text-3xl text-blue-500 mb-3"></i>
-                        <span class="block font-bold text-blue-600">Tap to Add Photos</span>
-                        <span class="block text-xs text-gray-500 mt-2">
-                            Capture exterior, wide shots, damage evidence, serial numbers, etc.
-                        </span>
-                        <input type="file" id="bulkPhotoInput" accept="image/*" multiple 
-                               class="hidden">
-                    </label>
-                </div>
-                
-                <div class="text-xs text-gray-600">
-                    <p class="font-bold mb-2 uppercase tracking-wide">Minimum Photo Set:</p>
-                    <ul class="list-disc list-inside space-y-1">
-                        <li>Exterior front & unit door</li>
-                        <li>One wide shot per room</li>
-                        <li>Thermostat reading</li>
-                        <li>Electrical panel interior</li>
-                        <li>Under sinks (dry pipes)</li>
-                        <li>Any damage or safety issues</li>
-                        <li>Appliance serial tags</li>
-                    </ul>
-                </div>
-            </div>
-            
-            <div id="photoGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-                </div>
-        </section>
-        
-        <section class="bg-white rounded-lg shadow-sm border p-5 smooth-transition">
-            <h2 class="font-bold text-lg mb-4 text-gray-800 border-b pb-2">
-                <i class="fas fa-sticky-note text-blue-600 mr-2"></i> Notes & Summary
-            </h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-2">Runner Observations / Deficiencies</label>
-                    <textarea id="deficiencyNotes" rows="6" 
-                              class="w-full border rounded px-3 py-2 text-sm smooth-transition"
-                              placeholder="List failed items, maintenance issues, safety concerns..."
-                              data-state-key="deficiencyNotes"></textarea>
-                </div>
-                
-                <div>
-                    <div class="flex justify-between items-center mb-2">
-                        <label class="block text-xs font-bold text-gray-600">Professional Summary</label>
-                        <button id="btnAutoSummary" class="text-xs px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 smooth-transition">
-                            <i class="fas fa-robot mr-1"></i> Auto-Generate
-                        </button>
-                    </div>
-                    <textarea id="finalNotes" rows="6" 
-                              class="w-full border rounded px-3 py-2 text-sm smooth-transition"
-                              placeholder="Provide a professional summary of findings, immediate actions required..."
-                              data-state-key="finalNotes"></textarea>
-                </div>
-            </div>
-            
-            <div class="mt-6 pt-4 border-t">
-                <label class="block text-xs font-bold text-gray-600 mb-2">Overall Unit Status</label>
-                <div class="flex gap-4">
-                    <label class="flex items-center">
-                        <input type="radio" name="unitStatus" value="PASS" class="mr-2" data-state-key="unitStatus">
-                        <span class="font-bold text-green-700">PASS (Rent-Ready)</span>
-                    </label>
-                    <label class="flex items-center">
-                        <input type="radio" name="unitStatus" value="FAIL" class="mr-2">
-                        <span class="font-bold text-red-700">FAIL (Do Not List)</span>
-                    </label>
-                    <label class="flex items-center">
-                        <input type="radio" name="unitStatus" value="REPAIR" class="mr-2">
-                        <span class="font-bold text-yellow-700">REQUIRES REPAIR</span>
-                    </label>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <footer class="no-print bg-white border-t p-4 sticky bottom-0 z-30 shadow-lg">
-        <div class="max-w-4xl mx-auto flex justify-between">
-            <button id="btnReset" class="px-4 py-2 text-gray-600 hover:text-red-600 smooth-transition">
-                <i class="fas fa-undo mr-1"></i> Reset Form
-            </button>
-            <button id="btnGenerateReport" class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 smooth-transition">
-                <i class="fas fa-file-pdf mr-2"></i> Generate Official Report
-            </button>
-        </div>
-    </footer>
-
-    <div id="reportModal" class="hidden">
-        <div class="bg-white max-w-4xl w-full mx-4 rounded-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div class="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
-                <h3 class="font-bold text-gray-800">Report Preview</h3>
-                <div class="flex gap-2">
-                    <button onclick="toggleReportModal()"
-                            class="px-3 py-1 text-sm border rounded smooth-transition">Close</button>
-                    <button onclick="window.print()"
-                            class="px-3 py-1 text-sm bg-blue-600 text-white rounded smooth-transition">
-                        <i class="fas fa-print mr-1"></i> Print / PDF
-                    </button>
-                </div>
-            </div>
-            <div id="reportContent" class="p-6">
-                </div>
-        </div>
-    </div>
-
-    <script src="assets/data/properties.js"></script>
-    <script src="assets/data/schema.js"></script>
-    <script src="assets/js/config.js"></script>
-    <script src="assets/js/core.js"></script>
+<header class="no-print bg-white border-b px-4 py-3 shadow-sm sticky top-0 z-40">
+<div class="flex justify-between items-center">
+<div><p class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Leaso Property Management</p>
+<h1 class="text-lg font-bold text-gray-900">Unified Field Assessor v2.2</h1>
+<p class="text-xs text-gray-500">Forensic Safety + Rent-Ready Protocol + Delta Report</p>
+</div>
+<div class="flex gap-2">
+<button id="btnSaveDraft" class="px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50 smooth-transition">
+<i class="fas fa-save mr-1"></i> Save
+</button>
+<!-- NEW: Delta Report Button (conditionally shown) -->
+<button id="btnGenerateDelta" class="px-3 py-1.5 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 smooth-transition hidden">
+<i class="fas fa-balance-scale mr-1"></i> Generate Delta Report
+</button>
+<button id="btnShowReport" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 smooth-transition">
+<i class="fas fa-file-contract mr-1"></i> Report
+</button>
+</div>
+</div>
+</header>
+<main class="max-w-4xl mx-auto p-4 space-y-6">
+<section class="bg-white rounded-lg shadow-sm border p-5 smooth-transition">
+<h2 class="font-bold text-lg mb-4 text-gray-800 border-b pb-2">
+<i class="fas fa-clipboard-check text-blue-600 mr-2"></i> Inspection Header
+</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div>
+<label class="block text-xs font-bold text-gray-600 mb-1">Property Address</label>
+<input type="text" id="propAddress" list="propertyList"
+class="w-full border rounded px-3 py-2 text-sm smooth-transition"
+placeholder="Start typing address..."
+data-state-key="propAddress">
+<datalist id="propertyList"></datalist>
+<!-- NEW: Inspection History Indicator -->
+<div id="inspectionHistoryBadge" class="mt-1 text-xs hidden">
+<span class="inspection-history-badge bg-blue-100 text-blue-800">
+<i class="fas fa-history mr-1"></i><span id="historyCount">0</span> prior inspections
+</span>
+</div>
+</div>
+<div>
+<label class="block text-xs font-bold text-gray-600 mb-1">Unit / Area</label>
+<input type="text" id="unitRef" class="w-full border rounded px-3 py-2 text-sm smooth-transition"
+placeholder="Unit # / Common Area" data-state-key="unitRef">
+</div>
+<div>
+<label class="block text-xs font-bold text-gray-600 mb-1">City / Region</label>
+<input type="text" id="cityRegion" class="w-full border rounded px-3 py-2 text-sm smooth-transition"
+placeholder="City" data-state-key="cityRegion">
+</div>
+<div>
+<label class="block text-xs font-bold text-gray-600 mb-1">Inspection Date</label><input type="date" id="inspectDate" class="w-full border rounded px-3 py-2 text-sm smooth-transition"
+data-state-key="inspectDate">
+</div>
+<div>
+<label class="block text-xs font-bold text-gray-600 mb-1">Runner / Assessor</label>
+<input type="text" id="assessorName" class="w-full border rounded px-3 py-2 text-sm smooth-transition"
+placeholder="Your Name" data-state-key="assessorName">
+</div>
+<div>
+<label class="block text-xs font-bold text-gray-600 mb-1">Tenant Reference (Optional)</label>
+<input type="text" id="tenantName" class="w-full border rounded px-3 py-2 text-sm smooth-transition"
+placeholder="Last Name / Vacant" data-state-key="tenantName">
+</div>
+<div class="md:col-span-2">
+<label class="block text-xs font-bold text-gray-600 mb-1">Inspection Type</label>
+<select id="inspectionType" class="w-full border rounded px-3 py-2 text-sm font-medium smooth-transition"
+data-state-key="inspectionType">
+<option value="routine">Routine / Periodic (Safety Focus)</option>
+<option value="turnover">Rent-Ready / Turnover (Forensic)</option>
+<option value="moveIn">Move-In (Baseline Documentation) - SAVE PDF FOR LTB EVIDENCE</option>
+<option value="moveOut">Move-Out (Damage Assessment) - REQUIRES MOVE-IN BASELINE</option>
+</select>
+<p id="typeDescription" class="text-xs text-gray-500 mt-1 italic">
+Select inspection type. For Move-Out: Complete Move-In inspection first for Delta Report capability.
+</p>
+</div>
+</div>
+</section>
+<section id="checklistContainer" class="space-y-6">
+</section>
+<section class="bg-white rounded-lg shadow-sm border p-5 smooth-transition">
+<h2 class="font-bold text-lg mb-4 text-gray-800 border-b pb-2">
+<i class="fas fa-camera text-blue-600 mr-2"></i> Photo Evidence
+<span id="photoCounter" class="ml-2 text-xs bg-gray-200 px-2 py-1 rounded smooth-transition">0/25</span>
+</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div>
+<label class="block w-full border-2 border-dashed border-blue-400 rounded-lg p-6 text-center cursor-pointer hover:bg-blue-50 transition smooth-transition">
+<i class="fas fa-cloud-upload-alt text-3xl text-blue-500 mb-3"></i>
+<span class="block font-bold text-blue-600">Tap to Add Photos</span>
+<span class="block text-xs text-gray-500 mt-2">
+Capture exterior, wide shots, damage evidence, serial numbers, etc.
+</span>
+<input type="file" id="bulkPhotoInput" accept="image/png, image/jpeg, image/jpg, image/webp, image/heic" multiple
+class="hidden">
+</label>
+</div>
+<div class="text-xs text-gray-600">
+<p class="font-bold mb-2 uppercase tracking-wide">Minimum Photo Set:</p>
+<ul class="list-disc list-inside space-y-1"><li>Exterior front & unit door</li>
+<li>One wide shot per room</li>
+<li>Thermostat reading</li>
+<li>Electrical panel interior</li>
+<li>Under sinks (dry pipes)</li>
+<li>Any damage or safety issues</li>
+<li>Appliance serial tags</li>
+</ul>
+</div>
+</div>
+<div id="photoGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+</div>
+</section>
+<section class="bg-white rounded-lg shadow-sm border p-5 smooth-transition">
+<h2 class="font-bold text-lg mb-4 text-gray-800 border-b pb-2">
+<i class="fas fa-sticky-note text-blue-600 mr-2"></i> Notes & Summary
+</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div>
+<label class="block text-xs font-bold text-gray-600 mb-2">Runner Observations / Deficiencies</label>
+<textarea id="deficiencyNotes" rows="6"
+class="w-full border rounded px-3 py-2 text-sm smooth-transition"
+placeholder="List failed items, maintenance issues, safety concerns..."
+data-state-key="deficiencyNotes"></textarea>
+</div>
+<div>
+<div class="flex justify-between items-center mb-2">
+<label class="block text-xs font-bold text-gray-600">Professional Summary</label>
+<button id="btnAutoSummary" class="text-xs px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 smooth-transition">
+<i class="fas fa-robot mr-1"></i> Auto-Generate
+</button>
+</div>
+<textarea id="finalNotes" rows="6"
+class="w-full border rounded px-3 py-2 text-sm smooth-transition"
+placeholder="Provide a professional summary of findings, immediate actions required..."
+data-state-key="finalNotes"></textarea>
+</div>
+</div>
+<div class="mt-6 pt-4 border-t">
+<label class="block text-xs font-bold text-gray-600 mb-2">Overall Unit Status</label>
+<div class="flex gap-4">
+<label class="flex items-center">
+<input type="radio" name="unitStatus" value="PASS" class="mr-2" data-state-key="unitStatus">
+<span class="font-bold text-green-700">PASS (Rent-Ready)</span>
+</label>
+<label class="flex items-center">
+<input type="radio" name="unitStatus" value="FAIL" class="mr-2">
+<span class="font-bold text-red-700">FAIL (Do Not List)</span>
+</label>
+<label class="flex items-center"><input type="radio" name="unitStatus" value="REPAIR" class="mr-2">
+<span class="font-bold text-yellow-700">REQUIRES REPAIR</span>
+</label>
+</div>
+</div>
+</section>
+</main>
+<footer class="no-print bg-white border-t p-4 sticky bottom-0 z-30 shadow-lg">
+<div class="max-w-4xl mx-auto flex justify-between">
+<button id="btnReset" class="px-4 py-2 text-gray-600 hover:text-red-600 smooth-transition">
+<i class="fas fa-undo mr-1"></i> Reset Form
+</button>
+<button id="btnGenerateReport" class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 smooth-transition">
+<i class="fas fa-file-pdf mr-2"></i> Generate Official Report
+</button>
+</div>
+</footer>
+<div id="reportModal" class="hidden">
+<div class="bg-white max-w-4xl w-full mx-4 rounded-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+<div class="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
+<h3 class="font-bold text-gray-800">Report Preview</h3>
+<div class="flex gap-2">
+<button onclick="toggleReportModal()"
+class="px-3 py-1 text-sm border rounded smooth-transition">Close</button>
+<button onclick="window.print()"
+class="px-3 py-1 text-sm bg-blue-600 text-white rounded smooth-transition">
+<i class="fas fa-print mr-1"></i> Save as PDF
+</button>
+</div>
+</div>
+<div id="reportContent" class="p-6">
+</div>
+<div class="mt-6 pt-4 border-t bg-gray-50 rounded-b-lg">
+<div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+<div class="text-xs text-gray-600">
+<p><strong>Pro Tip:</strong> For Move-Out inspections, generate Delta Report BEFORE finalizing to include comparison in official report.</p>
+<p class="mt-1 text-purple-700 font-medium">
+<i class="fas fa-lightbulb mr-1"></i> LTB Success Strategy: Always complete Move-In inspection first. Save PDF report. Reference Report ID during Move-Out.
+</p>
+</div>
+<div class="flex gap-2">
+<button onclick="toggleReportModal()" 
+class="px-4 py-2 text-sm border rounded smooth-transition hover:bg-gray-100">
+Close
+</button>
+<button onclick="window.print()" 
+class="px-4 py-2 text-sm bg-blue-600 text-white rounded smooth-transition hover:bg-blue-700">
+<i class="fas fa-print mr-1"></i> Save as PDF
+</button>
+</div></div>
+<!-- NEW: Delta Report Status Banner -->
+<div id="deltaReportBanner" class="hidden mt-4 p-3 bg-purple-50 border-l-4 border-purple-600 rounded-r">
+<div class="flex items-start">
+<i class="fas fa-info-circle text-purple-700 mt-0.5 mr-2"></i>
+<div class="text-sm text-purple-800">
+<p class="font-bold">Delta Report Active</p>
+<p>This report includes Move-In vs Move-Out comparison. For LTB filing:</p>
+<ul class="list-disc list-inside mt-1 space-y-1">
+<li>Attach this complete report</li>
+<li>Include saved Move-In report (PDF)</li>
+<li>Add vendor quotes for claimed amounts</li>
+<li>File Form L10 within 1 year of move-out date</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script src="assets/data/properties.js"></script>
+<script src="assets/data/schema.js"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/core.js"></script>
+<script>
+// Show Delta banner if report contains Delta section
+document.addEventListener('DOMContentLoaded', function() {
+const reportContent = document.getElementById('reportContent');
+const banner = document.getElementById('deltaReportBanner');
+if (reportContent && banner) {
+const observer = new MutationObserver(() => {
+if (reportContent.innerHTML.includes('DELTA REPORT')) {
+banner.classList.remove('hidden');
+} else {
+banner.classList.add('hidden');
+}
+});
+observer.observe(reportContent, { childList: true, subtree: true });
+}
+});
+</script>
 </body>
 </html>
