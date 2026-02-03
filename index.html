@@ -8,6 +8,14 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <!-- QR Code Library (CDN) -->
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<!-- jsQR Library for QR Code Scanning -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<!-- Application Configuration -->
+<script src="assets/js/config.js"></script>
+<script src="assets/data/properties.js"></script>
+<script src="assets/data/schema.js"></script>
+<!-- Core Application Logic -->
+<script src="assets/js/core.js"></script>
 <style>
 /* FIXED: Forensic Print Isolation Block (v2.2) */
 @media print {
@@ -155,6 +163,46 @@ font-size: 0.75rem;
 font-weight: 600;
 margin-left: 0.5rem;
 }
+/* Delta Report Import Status Indicators */
+#moveInImportStatus.imported::before,
+#moveOutImportStatus.imported::before {
+    content: "✓ ";
+    color: #059669;
+    font-weight: bold;
+}
+
+/* QR Scanner Animation */
+@keyframes scan-line {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(250px); }
+}
+
+#qrVideo + canvas + div > div::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(to right, transparent, #10b981, transparent);
+    animation: scan-line 2s ease-in-out infinite;
+}
+
+/* Floating Button Entrance Animation */
+#floatingReportButton {
+    animation: slideInFromRight 0.3s ease-out;
+}
+
+@keyframes slideInFromRight {
+    from {
+        transform: translateX(100px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
 </style>
 </head>
 <body class="min-h-screen bg-gray-50 text-gray-800 text-sm">
@@ -162,7 +210,7 @@ margin-left: 0.5rem;
 <div class="flex justify-between items-center">
 <div>
 <p class="text-[10px] uppercase tracking-[0.2em] text-gray-400">Leaso Property Management</p>
-<h1 class="text-lg font-bold text-gray-900">Unified Field Assessor v2.2</h1>
+<h1 class="text-lg font-bold text-gray-900">Unified Field Assessor v3.2</h1>
 <p class="text-xs text-gray-500">Forensic Safety + Rent-Ready Protocol + Delta Report</p>
 </div>
 <div class="flex gap-2">
@@ -225,12 +273,12 @@ placeholder="Last Name / Vacant" data-state-key="tenantName">
 </div>
 <div class="md:col-span-2">
 <label class="block text-xs font-bold text-gray-600 mb-1">Inspection Type</label>
-<select id="inspectionType" class="w-full border rounded px-3 py-2 text-sm font-medium smooth-transition"
-data-state-key="inspectionType">
-<option value="routine">Routine / Periodic (Safety Focus)</option>
-<option value="turnover">Rent-Ready / Turnover (Forensic)</option>
-<option value="moveIn">Move-In (Baseline Documentation) - SAVE PDF FOR LTB EVIDENCE</option>
-<option value="moveOut">Move-Out (Damage Assessment) - REQUIRES MOVE-IN BASELINE</option>
+<select id="inspectionType" data-state-key="inspectionType" class="w-full p-2 border border-gray-300 rounded">
+<option value="routine">Routine Safety Check</option>
+<option value="turnover">Turnover Inspection</option>
+<option value="moveIn">Move-In Inspection</option>
+<option value="moveOut">Move-Out Inspection</option>
+<option value="deltaReport">Delta Report (Office Analysis)</option>
 </select>
 <p id="typeDescription" class="text-xs text-gray-500 mt-1 italic">
 Select inspection type. For Move-Out: Complete Move-In inspection first for Delta Report capability.
@@ -238,6 +286,71 @@ Select inspection type. For Move-Out: Complete Move-In inspection first for Delt
 </div>
 </div>
 </section>
+<!-- DELTA REPORT IMPORT CONTROLS (v3.2) -->
+<!-- Shows only when deltaReport inspection type is selected -->
+<div id="deltaReportControls" class="hidden bg-purple-50 border-2 border-purple-300 rounded-lg p-4 mb-6">
+    <h3 class="text-lg font-bold text-purple-900 mb-3">
+        <i class="fas fa-file-import mr-2"></i>Import Baseline & Exit Data
+    </h3>
+    <p class="text-sm text-purple-700 mb-4">
+        To perform Delta Report analysis, you must import both the Move-In baseline report and the Move-Out exit report. Use the buttons
+below to import via JSON file upload or QR code scanning.
+    </p>
+    <!-- Move-In Baseline Import -->
+    <div class="bg-white rounded-lg p-4 mb-4 border border-purple-200">
+        <div class="flex items-center justify-between mb-2">
+            <h4 class="font-bold text-purple-800">
+                <i class="fas fa-sign-in-alt mr-1"></i>1. Import Move-In Baseline
+            </h4>
+            <span id="moveInImportStatus" class="text-sm hidden"></span>
+        </div>
+        <p class="text-xs text-gray-600 mb-3">
+            Required: Import the pristine baseline condition from the Move-In inspection
+        </p>
+        <div class="flex gap-2">
+            <button id="btnImportMoveIn" type="button"
+                    class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                <i class="fas fa-file-upload mr-2"></i>Import JSON File
+            </button>
+            <button id="btnQRScanMoveIn" type="button"
+                    class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                <i class="fas fa-qrcode mr-2"></i>Scan QR Code
+            </button>
+        </div>
+    </div>
+    <!-- Move-Out Report Import -->
+    <div class="bg-white rounded-lg p-4 mb-4 border border-purple-200">
+        <div class="flex items-center justify-between mb-2">
+            <h4 class="font-bold text-purple-800">
+                <i class="fas fa-sign-out-alt mr-1"></i>2. Import Move-Out Report
+            </h4>
+            <span id="moveOutImportStatus" class="text-sm hidden"></span>
+        </div>
+        <p class="text-xs text-gray-600 mb-3">
+            Required: Import the exit condition from the Move-Out inspection
+        </p>
+        <div class="flex gap-2">
+            <button id="btnImportMoveOut" type="button"
+                    class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                <i class="fas fa-file-upload mr-2"></i>Import JSON File
+            </button>
+            <button id="btnQRScanMoveOut" type="button"
+                    class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                <i class="fas fa-qrcode mr-2"></i>Scan QR Code
+            </button>
+        </div>
+    </div>
+    <!-- Import Completion Status -->
+    <div id="deltaImportCompletion" class="hidden mt-4"></div>
+    <!-- Instructions -->
+    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 mt-4">
+        <p class="text-xs text-yellow-800">
+            <i class="fas fa-info-circle mr-1"></i>
+            <strong>Note:</strong> After importing both reports, scroll down to begin the Delta Report checklist. The system will guide you
+through comparing baseline vs exit conditions and calculating total claim amounts.
+        </p>
+    </div>
+</div>
 <section id="checklistContainer" class="space-y-6">
 </section>
 <section class="bg-white rounded-lg shadow-sm border p-5 smooth-transition">
@@ -390,10 +503,94 @@ class="px-4 py-2 text-sm bg-blue-600 text-white rounded smooth-transition hover:
 </div>
 </div>
 </div>
-<script src="assets/data/properties.js"></script>
-<script src="assets/data/schema.js"></script>
-<script src="assets/js/config.js"></script>
-<script src="assets/js/core.js"></script>
+<!-- QR CODE SCANNER MODAL (v3.2) -->
+<div id="qrScannerModal" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg max-w-2xl w-full p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold text-gray-800">
+                <i class="fas fa-qrcode mr-2"></i>Scan QR Code
+            </h3>
+            <button id="btnCloseQRScanner" type="button" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times text-2xl"></i>
+            </button>
+        </div>
+        <div class="mb-4">
+            <p class="text-sm text-gray-600 mb-2">
+                Point your device camera at the QR code on a printed inspection report or another screen. The data will be imported
+automatically when detected.
+            </p>
+            <ul class="text-xs text-gray-500 space-y-1 list-disc list-inside">
+                <li>QR codes are located on page 2 of Move-In inspection reports</li>
+                <li>Ensure the entire QR code is visible in the camera frame</li>
+                <li>Hold steady for 1-2 seconds to allow detection</li>
+                <li>Works with printed reports or QR codes displayed on another device screen</li>
+            </ul>
+        </div>
+        <div class="relative bg-gray-900 rounded-lg overflow-hidden" style="aspect-ratio: 4/3;">
+            <video id="qrVideo" class="w-full h-full object-cover" playsinline></video>
+            <canvas id="qrCanvas" class="hidden"></canvas>
+            <!-- Scanning Indicator -->
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div class="border-4 border-green-500 rounded-lg" style="width: 250px; height: 250px;">
+                    <div class="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-green-500"></div>
+                    <div class="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-green-500"></div>
+                    <div class="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-green-500"></div>
+                    <div class="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-green-500"></div>
+                </div>
+            </div>
+            <div class="absolute bottom-4 left-0 right-0 text-center">
+                <p class="text-white text-sm font-medium bg-black bg-opacity-50 inline-block px-4 py-2 rounded">
+                    <i class="fas fa-camera mr-2 animate-pulse"></i>Scanning for QR code...
+                </p>
+            </div>
+        </div>
+        <div class="mt-4 text-center">
+            <button id="btnCancelQRScan" type="button" class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-
+colors">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+<!-- Make Cancel button also close the scanner -->
+<script>
+document.getElementById('btnCancelQRScan')?.addEventListener('click', function() {
+    closeQRScanner();
+});
+</script>
+<!-- FLOATING GENERATE REPORT BUTTON (Optional Enhancement) -->
+<!-- Shows on all inspection types except deltaReport -->
+<div id="floatingReportButton" class="fixed bottom-6 right-6 z-40 hidden">
+    <button onclick="document.getElementById('btnGenerateReport').click()"
+            class="px-6 py-3 bg-blue-600 text-white rounded-full shadow-2xl font-bold hover:bg-blue-700 hover:scale-110 transition-all
+duration-200 flex items-center">
+        <i class="fas fa-file-pdf mr-2"></i> Generate Report
+    </button>
+</div>
+<script>
+// Show/hide floating button based on scroll position and inspection type
+window.addEventListener('scroll', function() {
+    const floatingBtn = document.getElementById('floatingReportButton');
+    const inspectionType = document.getElementById('inspectionType').value;
+    if (floatingBtn && inspectionType !== 'deltaReport') {
+        if (window.scrollY > 300) {
+            floatingBtn.classList.remove('hidden');
+        } else {
+            floatingBtn.classList.add('hidden');
+        }
+    } else if (floatingBtn) {
+        floatingBtn.classList.add('hidden');
+    }
+});
+
+// Also check inspection type changes
+document.getElementById('inspectionType')?.addEventListener('change', function() {
+    const floatingBtn = document.getElementById('floatingReportButton');
+    if (floatingBtn && this.value === 'deltaReport') {
+        floatingBtn.classList.add('hidden');
+    }
+});
+</script>
 <script>
 // Show Delta banner if report contains Delta section
 document.addEventListener('DOMContentLoaded', function() {
