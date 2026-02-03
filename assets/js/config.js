@@ -1,46 +1,82 @@
 // FILE: config.js
-// CLASSIFICATION: System Settings & Technical Constraints
-// PURPOSE: Control panel for compression tuning, limits, and app behavior
+// VERSION: 3.2 - Production Release
+// DATE: February 3, 2026
+// CLASSIFICATION: Application Configuration
+// PURPOSE: Centralized configuration for branding, storage, and inspection type definitions
+
 const APP_CONFIG = {
-// Version & Branding
-VERSION: "v2.2.0-DELTA",
-BRAND_NAME: "Leaso Property Management",
-// Image Compression Settings (Optimized for mobile networks)
-IMAGE: {
-MAX_WIDTH: 800,              // px - Balanced quality/size
-QUALITY: 0.5,                // 0.0-1.0 - JPEG compression
-MAX_PHOTOS: 25,              // Prevent browser memory crashes
-THUMBNAIL_SIZE: 120          // px - For grid display
-},
-// Storage & Persistence
-STORAGE: {
-AUTO_SAVE_INTERVAL: 5000,    // ms - Save every 5 seconds
-DRAFT_KEY: "leaso_assessor_draft_v2",
-STATE_KEY: "leaso_assessor_state"
-},
-// UI & Behavior
-UI: {
-SHOW_PHOTO_COUNTER: true,
-AUTO_GENERATE_SUMMARY: true,
-CONFIRM_RESET: true,
-SMOOTH_SCROLL: true
-},
-// Inspection Types Mapping (Enhanced for Delta Workflow)
-INSPECTION_TYPES: {
-routine: "Routine / Periodic (Safety Focus)",
-turnover: "Rent-Ready / Turnover (Forensic)",
-moveIn: "Move-In (Baseline Documentation) - SAVE PDF FOR LTB EVIDENCE",
-moveOut: "Move-Out (Damage Assessment) - REQUIRES MOVE-IN BASELINE"
-},
-// Status Options
-STATUS_OPTIONS: [
-{ value: "pass", label: "Pass", color: "green" },
-{ value: "fail", label: "Fail", color: "red" },
-{ value: "na", label: "N/A", color: "gray" },
-{ value: "repair", label: "Needs Repair", color: "yellow" }
-]
+	// Application Identity
+	VERSION: "3.2",
+	BRAND_NAME: "Leaso Assessor App",
+	
+	// Inspection Type Definitions
+	INSPECTION_TYPES: {
+		routine: "Routine Safety Check",
+		turnover: "Turnover Inspection",
+		moveIn: "Move-In Inspection",
+		moveOut: "Move-Out Inspection",
+		deltaReport: "Delta Report (Office Analysis)"
+	},
+	
+	// Inspection Type Descriptions
+	INSPECTION_DESCRIPTIONS: {
+		routine: "Quick safety verification during active tenancy. Focus on life-critical systems and compliance. Duration: 15-20 minutes.",
+		turnover: "Comprehensive rent-ready verification between tenancies. Ensures unit meets market standards before advertising. Duration: 30-45 minutes.",
+		moveIn: "Baseline documentation before tenant occupancy. Creates exportable reference for future damage assessment. Duration: 45-60 minutes.",
+		moveOut: "Exit documentation after tenant vacates. Field observation only - no comparison or calculation required. Duration: 45-60 minutes.",
+		deltaReport: "Office-based comparative analysis. Systematically compares Move-In baseline vs Move-Out exit data to identify damage, calculate costs, and prepare evidence for legal proceedings. Requires importing both Move-In and Move-Out reports. Duration: 60-90 minutes. FOR OFFICE STAFF ONLY."
+	},
+	
+	// Storage Configuration
+	STORAGE: {
+		DRAFT_KEY: "assessor_draft",
+		HISTORY_KEY: "assessor_history",
+		BASELINE_KEY: "assessor_movein_baseline"
+	},
+	
+	// UI Behavior Configuration
+	UI: {
+		AUTO_SAVE_INTERVAL: 30000, // 30 seconds
+		PHOTO_COMPRESSION_QUALITY: 0.8,
+		MAX_PHOTO_DIMENSION: 1920,
+		CONFIRM_RESET: true,
+		SHOW_BETA_FEATURES: true
+	},
+	
+	// Report Generation Configuration
+	REPORT: {
+		INCLUDE_TIMESTAMP: true,
+		INCLUDE_QR_CODE: true, // For Move-In reports
+		INCLUDE_JSON_DATA_PAGE: true, // Embed full JSON data as final page
+		QR_CODE_SIZE: 250,
+		QR_CODE_CORRECTION_LEVEL: "H" // High error correction
+	},
+	
+	// Delta Report Configuration
+	DELTA: {
+		REQUIRE_MOVEIN_IMPORT: true,
+		REQUIRE_MOVEOUT_IMPORT: true,
+		VALIDATE_ADDRESS_MATCH: true,
+		SHOW_IMPORT_WARNINGS: true
+	},
+	
+	// Photo Validation Requirements
+	PHOTO_VALIDATION: {
+		moveIn: {
+			minPhotosRequired: 5, // Minimum photos for room documentation
+			criticalItems: ["exterior_baseline", "room_wide_shots"]
+		},
+		moveOut: {
+			minPhotosRequired: 5,
+			criticalItems: ["room_wide_final", "damage_macro_photos"]
+		},
+		deltaReport: {
+			minPhotosRequired: 0 // Delta Report uses imported photos
+		}
+	}
 };
+
 // Export for modular consumption
 if (typeof module !== 'undefined' && module.exports) {
-module.exports = { APP_CONFIG };
+	module.exports = { APP_CONFIG };
 }
