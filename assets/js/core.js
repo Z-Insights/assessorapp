@@ -15,10 +15,10 @@ let appState = {
         tenantName: "",
         inspectionType: "routine"
     },
-    // Checklist Items: { [itemId]: { status, note, photos: [], timestamp } }
+    // Checklist Items
     items: {},
-    // Global Photos (Evidence Locker)
-    photos: [], // { id, data, caption, itemId, timestamp }
+    // Global Photos
+    photos: [],
     // Global Notes
     deficiencyNotes: "",
     finalNotes: "",
@@ -26,16 +26,23 @@ let appState = {
     // Metadata
     lastSaved: null,
     version: APP_CONFIG.VERSION,
-    // NEW: Delta Report & History Tracking
-    moveInReference: null, // { reportId, date, propAddress, keyItems: {} }
-    deltaReport: null      // Generated comparison data
+    // === DELTA REPORT ENHANCEMENTS v3.2 ===
+    moveInReference: null,     // Stores imported Move-In baseline data
+    moveOutReference: null,    // Stores imported Move-Out report data
+    deltaReport: null,         // Stores generated comparison analysis
+    deltaImportStatus: {       // Tracks import completion for Delta Report workflow
+        moveInImported: false,
+        moveOutImported: false,
+        addressMatch: false,
+        validationErrors: []
+    }
 };
 
 // ============================================================================
 // INITIALIZATION FUNCTIONS
 // ============================================================================
 function initApp() {
-    console.log(`Initializing ${APP_CONFIG.BRAND_NAME} Assessor v${APP_CONFIG.VERSION}`);
+    console.log(`Initializing \( {APP_CONFIG.BRAND_NAME} Assessor v \){APP_CONFIG.VERSION}`);
     // 1. Load saved draft
     loadDraft();
     // 2. Initialize property autocomplete
@@ -191,6 +198,24 @@ function setupEventListeners() {
             e.target.value = ''; // Reset input for re-use
         }
     });
+    // === DELTA REPORT EVENT LISTENERS ===
+    document.getElementById('btnImportMoveIn')?.addEventListener('click', importMoveInBaseline);
+    document.getElementById('btnImportMoveOut')?.addEventListener('click', importMoveOutReport);
+    document.getElementById('btnQRScanMoveIn')?.addEventListener('click', () => openQRScanner('moveIn'));
+    document.getElementById('btnQRScanMoveOut')?.addEventListener('click', () => openQRScanner('moveOut'));
+    document.getElementById('btnCloseQRScanner')?.addEventListener('click', closeQRScanner);
+
+    // Show/hide Delta Report import controls based on inspection type
+    document.getElementById('inspectionType').addEventListener('change', function() {
+        const deltaControls = document.getElementById('deltaReportControls');
+        if (deltaControls) {
+            if (this.value === 'deltaReport') {
+                deltaControls.classList.remove('hidden');
+            } else {
+                deltaControls.classList.add('hidden');
+            }
+        }
+    });
 }
 
 // ============================================================================
@@ -246,7 +271,7 @@ function renderChecklist() {
             APP_CONFIG.STATUS_OPTIONS.forEach(status => {
                 const button = document.createElement('button');
                 button.type = 'button';
-                button.className = `px-3 py-1.5 rounded text-xs font-medium ${existingState.status === status.value ? `status-${status.value}` : 'bg-gray-200 text-gray-700'}`;
+                button.className = `px-3 py-1.5 rounded text-xs font-medium \( {existingState.status === status.value ? `status- \){status.value}` : 'bg-gray-200 text-gray-700'}`;
                 button.textContent = status.label;
                 button.dataset.itemId = itemId; // Store item ID on button
                 button.dataset.status = status.value; // Store status on button
@@ -326,6 +351,352 @@ function renderChecklist() {
         sectionCard.appendChild(itemsContainer);
         container.appendChild(sectionCard);
     });
+}
+
+// ============================================================================
+// DELTA REPORT: JSON IMPORT & QR CODE SCANNING FUNCTIONS
+// ============================================================================
+
+/**
+* Opens file picker for importing Move-In baseline JSON
+* Triggered by "Import Move-In Baseline" button in Delta Report mode
+*/
+function importMoveInBaseline() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.onchange = function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    validateAndLoadMoveInBaseline(data);
+                } catch (error) {
+                    alert(`Error reading Move-In baseline file: ${error.message}\n\nPlease ensure you selected a valid JSON export file from a
+Move-In inspection.`);
+                    console.error('Move-In baseline import error:', error);
+                }
+            };
+            reader.readAsText(file);
+        }
+    };
+    input.click();
+}
+
+/**
+* Opens file picker for importing Move-Out report JSON
+* Triggered by "Import Move-Out Report" button in Delta Report mode
+*/
+function importMoveOutReport() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.onchange = function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    validateAndLoadMoveOutReport(data);
+                } catch (error) {
+                    alert(`Error reading Move-Out report file: ${error.message}\n\nPlease ensure you selected a valid JSON export file from a
+Move-Out inspection.`);
+                    console.error('Move-Out report import error:', error);
+                }
+            };
+            reader.readAsText(file);
+        }
+    };
+    input.click();
+}
+
+/**
+* Validates and loads Move-In baseline data into appState
+* Performs comprehensive validation of data structure and content
+*/
+function validateAndLoadMoveInBaseline(data) {
+    const errors = [];
+    // Validate basic structure
+    if (!data || typeof data !== 'object') {
+        errors.push('Invalid data format - not a valid JSON object');
+    }
+    // Validate inspection type
+    if (data.header && data.header.inspectionType !== 'moveIn') {
+        errors.push(`Wrong inspection type: Expected "moveIn" but got "${data.header.inspectionType}"`);
+    }
+    // Validate required fields
+    if (!data.header || !data.header.propAddress) {
+        errors.push('Missing property address in baseline data');
+    }
+    if (!data.header || !data.header.inspectDate) {
+        errors.push('Missing inspection date in baseline data');
+    }
+    if (!data.items || Object.keys(data.items).length === 0) {
+        errors.push('No inspection items found in baseline data');
+    }
+    // Display errors if any
+    if (errors.length > 0) {
+        alert(`Cannot import Move-In baseline:\n\n${errors.join('\n')}\n\nPlease verify you selected the correct Move-In inspection export
+file.`);
+        appState.deltaImportStatus.validationErrors = errors;
+        return false;
+    }
+    // Load data into appState
+    appState.moveInReference = {
+        reportId: data.reportId || generateReportId(),
+        date: data.header.inspectDate,
+        propAddress: data.header.propAddress,
+        unitRef: data.header.unitRef,
+        tenantName: data.header.tenantName,
+        items: data.items,
+        photos: data.photos || [],
+        fullData: data // Store complete data for reference
+    };
+    appState.deltaImportStatus.moveInImported = true;
+    // Check if both imports complete and addresses match
+    checkDeltaImportCompletion();
+    // Update UI feedback
+    const statusEl = document.getElementById('moveInImportStatus');
+    if (statusEl) {
+        statusEl.innerHTML = `<i class="fas fa-check-circle text-green-600"></i> Move-In baseline imported: ${data.header.propAddress}`;
+        statusEl.classList.remove('hidden');
+    }
+    // Mark import item as complete
+    updateItemStatus('import_movein_baseline', 'pass', `Imported: ${data.header.propAddress}, Date: ${data.header.inspectDate}`);
+    alert(`✓ Move-In baseline imported successfully!\n\nProperty: ${data.header.propAddress}\nDate: ${data.header.inspectDate}\nItems:
+${Object.keys(data.items).length}\nPhotos: ${(data.photos || []).length}`);
+    return true;
+}
+
+/**
+* Validates and loads Move-Out report data into appState
+* Performs comprehensive validation including address matching with Move-In baseline
+*/
+function validateAndLoadMoveOutReport(data) {
+    const errors = [];
+    // Validate basic structure
+    if (!data || typeof data !== 'object') {
+        errors.push('Invalid data format - not a valid JSON object');
+    }
+    // Validate inspection type
+    if (data.header && data.header.inspectionType !== 'moveOut') {
+        errors.push(`Wrong inspection type: Expected "moveOut" but got "${data.header.inspectionType}"`);
+    }
+    // Validate required fields
+    if (!data.header || !data.header.propAddress) {
+        errors.push('Missing property address in report data');
+    }
+    if (!data.header || !data.header.inspectDate) {
+        errors.push('Missing inspection date in report data');
+    }
+    if (!data.items || Object.keys(data.items).length === 0) {
+        errors.push('No inspection items found in report data');
+    }
+    // Display errors if any
+    if (errors.length > 0) {
+        alert(`Cannot import Move-Out report:\n\n${errors.join('\n')}\n\nPlease verify you selected the correct Move-Out inspection export
+file.`);
+        appState.deltaImportStatus.validationErrors = errors;
+        return false;
+    }
+    // Load data into appState
+    appState.moveOutReference = {
+        reportId: data.reportId || generateReportId(),
+        date: data.header.inspectDate,
+        propAddress: data.header.propAddress,
+        unitRef: data.header.unitRef,
+        tenantName: data.header.tenantName,
+        items: data.items,
+        photos: data.photos || [],
+        fullData: data // Store complete data for reference
+    };
+    appState.deltaImportStatus.moveOutImported = true;
+    // Check if both imports complete and addresses match
+    checkDeltaImportCompletion();
+    // Update UI feedback
+    const statusEl = document.getElementById('moveOutImportStatus');
+    if (statusEl) {
+        statusEl.innerHTML = `<i class="fas fa-check-circle text-green-600"></i> Move-Out report imported: ${data.header.propAddress}`;
+        statusEl.classList.remove('hidden');
+    }
+    // Mark import item as complete
+    updateItemStatus('import_moveout_report', 'pass', `Imported: ${data.header.propAddress}, Date: ${data.header.inspectDate}`);
+    alert(`✓ Move-Out report imported successfully!\n\nProperty: ${data.header.propAddress}\nDate: ${data.header.inspectDate}\nItems:
+${Object.keys(data.items).length}\nPhotos: ${(data.photos || []).length}`);
+    return true;
+}
+
+/**
+* Checks if both Move-In and Move-Out imports are complete
+* Validates that property addresses match
+* Updates UI status indicators
+*/
+function checkDeltaImportCompletion() {
+    if (!appState.deltaImportStatus.moveInImported || !appState.deltaImportStatus.moveOutImported) {
+        return; // Not both imported yet
+    }
+    // Check address match
+    const moveInAddr = appState.moveInReference.propAddress.toLowerCase().trim();
+    const moveOutAddr = appState.moveOutReference.propAddress.toLowerCase().trim();
+    appState.deltaImportStatus.addressMatch = (moveInAddr === moveOutAddr);
+    if (!appState.deltaImportStatus.addressMatch) {
+        const warning = `⚠️ ADDRESS MISMATCH WARNING\n\nMove-In Address: ${appState.moveInReference.propAddress}\nMove-Out
+Address: ${appState.moveOutReference.propAddress}\n\nThese appear to be different properties. Please verify you imported the
+correct reports.\n\nYou can continue, but comparison results may not be meaningful.`;
+        alert(warning);
+        // Mark verification item with warning
+        updateItemStatus('verify_property_match', 'fail', `ADDRESS MISMATCH: Move-In "${appState.moveInReference.propAddress}" vs
+Move-Out "${appState.moveOutReference.propAddress}"`);
+    } else {
+        // Mark verification as passed
+        updateItemStatus('verify_property_match', 'pass', `Addresses match: ${appState.moveInReference.propAddress}`);
+    }
+    // Update completion status indicator
+    const completionEl = document.getElementById('deltaImportCompletion');
+    if (completionEl) {
+        if (appState.deltaImportStatus.addressMatch) {
+            completionEl.innerHTML = `<div class="bg-green-100 border-l-4 border-green-600 p-4 mb-4">
+                <p class="text-green-800 font-bold"><i class="fas fa-check-circle mr-2"></i>Both reports imported successfully!</p>
+                <p class="text-green-700 text-sm mt-1">You can now proceed with the Delta Report analysis using the imported baseline and
+exit data.</p>
+            </div>`;
+        } else {
+            completionEl.innerHTML = `<div class="bg-yellow-100 border-l-4 border-yellow-600 p-4 mb-4">
+                <p class="text-yellow-800 font-bold"><i class="fas fa-exclamation-triangle mr-2"></i>Both reports imported with address
+mismatch</p>
+                <p class="text-yellow-700 text-sm mt-1">Verify you imported reports for the same property before proceeding with analysis.</p>
+            </div>`;
+        }
+        completionEl.classList.remove('hidden');
+    }
+}
+
+/**
+* Opens QR code scanner modal for importing baseline data
+* Uses device camera to scan QR codes from printed reports or screens
+*/
+function openQRScanner(importType) {
+    // Show QR scanner modal
+    const modal = document.getElementById('qrScannerModal');
+    if (!modal) {
+        alert('QR Scanner not available. Please use JSON file import instead.');
+        return;
+    }
+    modal.classList.remove('hidden');
+    // Initialize QR scanner
+    const video = document.getElementById('qrVideo');
+    const canvas = document.getElementById('qrCanvas');
+    const ctx = canvas.getContext('2d');
+    // Request camera access
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then(function(stream) {
+            video.srcObject = stream;
+            video.play();
+            // Start scanning loop
+            scanQRCode(video, canvas, ctx, importType, stream);
+        })
+        .catch(function(error) {
+            alert(`Camera access denied or unavailable:\n\n${error.message}\n\nPlease use JSON file import instead.`);
+            console.error('Camera error:', error);
+            closeQRScanner();
+        });
+}
+
+/**
+* Scans QR code from video stream
+* Decodes QR code data and imports into appropriate reference
+*/
+function scanQRCode(video, canvas, ctx, importType, stream) {
+    if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) {
+        requestAnimationFrame(() => scanQRCode(video, canvas, ctx, importType, stream));
+        return;
+    }
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    // Use jsQR library to decode (must be included in index.html)
+    if (typeof jsQR !== 'undefined') {
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        if (code) {
+            // QR code detected - stop scanning
+            stream.getTracks().forEach(track => track.stop());
+            try {
+                const data = JSON.parse(code.data);
+                // Import based on type
+                if (importType === 'moveIn') {
+                    validateAndLoadMoveInBaseline(data);
+                } else if (importType === 'moveOut') {
+                    validateAndLoadMoveOutReport(data);
+                }
+                closeQRScanner();
+            } catch (error) {
+                alert(`QR code detected but data is invalid:\n\n${error.message}\n\nPlease scan a valid inspection report QR code.`);
+                // Continue scanning
+                requestAnimationFrame(() => scanQRCode(video, canvas, ctx, importType, stream));
+            }
+        } else {
+            // No QR code detected - continue scanning
+            requestAnimationFrame(() => scanQRCode(video, canvas, ctx, importType, stream));
+        }
+    } else {
+        alert('QR code scanner library not loaded. Please use JSON file import instead.');
+        stream.getTracks().forEach(track => track.stop());
+        closeQRScanner();
+    }
+}
+
+/**
+* Closes QR scanner modal and stops camera
+*/
+function closeQRScanner() {
+    const modal = document.getElementById('qrScannerModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+    const video = document.getElementById('qrVideo');
+    if (video && video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+        video.srcObject = null;
+    }
+}
+
+/**
+* Helper function to update inspection item status
+* Used for marking Delta Report checklist items as complete during import
+*/
+function updateItemStatus(itemId, status, note) {
+    if (!appState.items[itemId]) {
+        appState.items[itemId] = {
+            status: status,
+            note: note || '',
+            photos: [],
+            timestamp: new Date().toISOString()
+        };
+    } else {
+        appState.items[itemId].status = status;
+        if (note) {
+            appState.items[itemId].note = note;
+        }
+        appState.items[itemId].timestamp = new Date().toISOString();
+    }
+    // Update UI if item element exists
+    const itemEl = document.querySelector(`[data-item-id="${itemId}"]`);
+    if (itemEl) {
+        const statusSelect = itemEl.querySelector('select');
+        if (statusSelect) {
+            statusSelect.value = status;
+        }
+        const noteTextarea = itemEl.querySelector('textarea');
+        if (noteTextarea && note) {
+            noteTextarea.value = note;
+        }
+    }
+    // Trigger autosave
+    debouncedSave();
 }
 
 // ============================================================================
@@ -711,7 +1082,7 @@ function exportMoveInBaseline() {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(baselineData, null, 2));
         const downloadAnchorNode = document.createElement('a');
         downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", `MoveIn_Baseline_${sanitizeAddress(baselineData.property.address)}_${baselineData.inspection.date}.json`);
+        downloadAnchorNode.setAttribute("download", `MoveIn_Baseline_\( {sanitizeAddress(baselineData.property.address)}_ \){baselineData.inspection.date}.json`);
         document.body.appendChild(downloadAnchorNode);
         downloadAnchorNode.click();
         downloadAnchorNode.remove();
@@ -1033,7 +1404,7 @@ function removePhoto(photoId) {
 function updatePhotoCounter() {
     const counter = document.getElementById('photoCounter');
     if (counter) {
-        counter.textContent = `${appState.photos.length}/${APP_CONFIG.IMAGE.MAX_PHOTOS}`;
+        counter.textContent = `\( {appState.photos.length}/ \){APP_CONFIG.IMAGE.MAX_PHOTOS}`;
         if (appState.photos.length >= APP_CONFIG.IMAGE.MAX_PHOTOS) {
             counter.className = 'ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded';
         } else if (appState.photos.length >= APP_CONFIG.IMAGE.MAX_PHOTOS * 0.8) {
@@ -1270,7 +1641,7 @@ function generateReport() {
                                         ${comp.delta}
                                     </td>
                                     <td class="px-4 py-3 text-sm font-bold text-right ${comp.claimAmount > 0 ? 'text-green-700' : 'text-gray-500'}">
-                                        ${comp.claimAmount > 0 ? `$${comp.claimAmount.toFixed(2)}` : '-'}
+                                        ${comp.claimAmount > 0 ? `\[ {comp.claimAmount.toFixed(2)}` : '-'}
                                     </td>
                                 </tr>
                             `).join('')}
@@ -1278,7 +1649,7 @@ function generateReport() {
                         <tfoot class="bg-gray-100 font-bold">
                             <tr>
                                 <td colspan="5" class="px-4 py-3 text-right text-gray-900">TOTAL CLAIM AMOUNT:</td>
-                                <td class="px-4 py-3 text-right text-green-800 text-lg">$${delta.totalClaimAmount.toFixed(2)}</td>
+                                <td class="px-4 py-3 text-right text-green-800 text-lg"> \]{delta.totalClaimAmount.toFixed(2)}</td>
                             </tr>
                         </tfoot>
                     </table>
@@ -1367,6 +1738,49 @@ function generateReport() {
                     </div>
                 </div>
             </div>
+// === JSON DATA PAGE (Final Page of Report) ===
+// This page contains the complete machine-readable inspection data
+// Can be scanned as QR code or extracted as text for re-import
+${APP_CONFIG.REPORT.INCLUDE_JSON_DATA_PAGE ? `
+<div class="report-page" style="page-break-before: always;">
+    <div class="text-center mb-8">
+        <h2 class="text-2xl font-bold text-gray-800">Machine-Readable Data Export</h2>
+        <p class="text-sm text-gray-600 mt-2">This page contains the complete inspection data in JSON format</p>
+        <p class="text-xs text-gray-500">Can be used to re-import this inspection or for audit verification</p>
+    </div>
+    <div class="bg-gray-50 border-2 border-gray-300 rounded p-4 mb-6">
+        <h3 class="font-bold text-gray-700 mb-2">How to Use This Data:</h3>
+        <ul class="text-sm text-gray-600 space-y-1 list-disc list-inside">
+            <li><strong>Re-Import:</strong> Use "Import JSON" feature to load this inspection into the app</li>
+            <li><strong>Delta Report:</strong> Import this Move-In baseline when conducting Move-Out Delta Report analysis</li>
+            <li><strong>Audit Trail:</strong> Provides permanent record of all inspection data for legal proceedings</li>
+            <li><strong>Data Portability:</strong> Can be transferred between devices, systems, or archived for long-term storage</li>
+        </ul>
+    </div>
+    <div class="bg-white border border-gray-300 rounded p-4">
+        <h3 class="font-bold text-gray-700 mb-3">Complete Inspection Data (JSON Format):</h3>
+        <pre class="text-xs font-mono bg-gray-100 p-4 rounded border border-gray-300 overflow-x-auto whitespace-pre-wrap break-
+words">${JSON.stringify({
+            reportId: generateReportId(),
+            exportDate: new Date().toISOString(),
+            reportType: appState.header.inspectionType,
+            header: appState.header,
+            items: appState.items,
+            photos: appState.photos,
+            deficiencyNotes: appState.deficiencyNotes,
+            finalNotes: appState.finalNotes,
+            unitStatus: appState.unitStatus,
+            moveInReference: appState.moveInReference,
+            deltaReport: appState.deltaReport,
+            version: APP_CONFIG.VERSION
+        }, null, 2)}</pre>
+    </div>
+    <div class="text-center mt-6 text-xs text-gray-500">
+        <p>Generated by \( {APP_CONFIG.BRAND_NAME} v \){APP_CONFIG.VERSION}</p>
+        <p class="mt-1">Report ID: ${generateReportId()} | Generated: ${new Date().toLocaleString()}</p>
+    </div>
+</div>
+` : ''}
         </div>
         `;
         reportContent.innerHTML = reportHTML;
@@ -1420,7 +1834,7 @@ function generateFindingsHTML() {
         if (sectionItems.length === 0) return;
         html += `
             <div class="mb-6">
-                <h3 class="font-bold text-gray-800 mb-2 ${section.colorClass} pl-2">${section.title}</h3>
+                <h3 class="font-bold text-gray-800 mb-2 \( {section.colorClass} pl-2"> \){section.title}</h3>
                 <div class="space-y-3">
         `;
         sectionItems.forEach(item => {
@@ -1433,9 +1847,9 @@ function generateFindingsHTML() {
                 <div class="border rounded p-3 break-inside-avoid">
                     <div class="flex justify-between items-start mb-2">
                         <span class="font-medium">${item.label}</span>
-                        <span class="text-xs px-2 py-1 rounded ${statusClass}">${itemState.status.toUpperCase()}</span>
+                        <span class="text-xs px-2 py-1 rounded \( {statusClass}"> \){itemState.status.toUpperCase()}</span>
                     </div>
-                    ${itemState.note ? `<p class="text-sm text-gray-600 mt-1">${itemState.note}</p>` : ''}
+                    \( {itemState.note ? `<p class="text-sm text-gray-600 mt-1"> \){itemState.note}</p>` : ''}
                     ${itemState.photos && itemState.photos.length > 0 ?
                      `<p class="text-xs text-gray-500 mt-2"><i class="fas fa-camera mr-1"></i>${itemState.photos.length} photo(s) attached</p>` : ''}
                 </div>
@@ -1455,7 +1869,7 @@ function generatePhotoEvidenceHTML() {
         html += `
             <div class="break-inside-avoid">
                 <div class="w-full aspect-square bg-gray-100 rounded border border-gray-200 flex items-center justify-center overflow-hidden">
-                    <img src="${photo.data}" class="max-w-full max-h-full object-contain" alt="${photo.caption}">
+                    <img src="\( {photo.data}" class="max-w-full max-h-full object-contain" alt=" \){photo.caption}">
                 </div>
                 <div class="p-2 text-xs text-gray-600 truncate text-center">${photo.caption}</div>
             </div>
@@ -1465,7 +1879,7 @@ function generatePhotoEvidenceHTML() {
 }
 
 function generateReportId() {
-    const seed = `${appState.header.propAddress}_${appState.header.inspectDate}_${Date.now()}`;
+    const seed = `\( {appState.header.propAddress}_ \){appState.header.inspectDate}_${Date.now()}`;
     let hash = 0;
     for (let i = 0; i < seed.length; i++) {
         hash = ((hash << 5) - hash) + seed.charCodeAt(i);
